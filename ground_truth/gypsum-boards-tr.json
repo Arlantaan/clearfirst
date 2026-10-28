@@ -1,0 +1,93 @@
+{
+  "case": "gypsum-boards-tr",
+  "declaration_type": "IM 4",
+  "procedure_code": "4000",
+  "customs_office": "GMBJL - Banjul Seaport",
+  "declarant_code": "DEC-0417",
+  "importer": {
+    "name": "Serrekunda Building Supplies Ltd",
+    "tin": "2021-GM-4471"
+  },
+  "exporter": {
+    "name": "Anadolu Yapi Malzemeleri A.S.",
+    "country": "TR"
+  },
+  "transport": {
+    "mode": "1 - Sea",
+    "vessel": "MSC CARLA / NL621R",
+    "bl_number": "MEDUMR556120",
+    "container": "TCLU 731 804-2",
+    "port_of_loading": "Mersin, Turkiye",
+    "port_of_discharge": "Banjul, The Gambia",
+    "arrival_date": "2026-06-20"
+  },
+  "valuation": {
+    "incoterm": "CIF",
+    "delivery_place": "Banjul",
+    "currency": "USD",
+    "invoice_total": 21000.0,
+    "exchange_rate_gmd_per_usd": 71.83,
+    "customs_value_gmd": 1508430.0
+  },
+  "items": [
+    {
+      "line": 1,
+      "description": "Standard gypsum plasterboard, 12.5 mm x 1200 mm x 2400 mm",
+      "hs_code": "6809.19.00",
+      "origin": "TR",
+      "packages": 1245,
+      "package_kind": "PX - Pallet",
+      "gross_kg": 28560,
+      "net_kg": 27940,
+      "supplementary_qty": 4980,
+      "supplementary_unit": "boards",
+      "item_value_usd": 21000.0,
+      "statistical_value_gmd": 1508430.0
+    }
+  ],
+  "taxes": {
+    "import_duty_pct": 0.0,
+    "processing_fee_pct": 1.5,
+    "au_levy_pct": 0.2,
+    "ecowas_levy_pct": 0.5,
+    "gnsw_fee_pct": 1.0,
+    "vat_pct": 0.0
+  },
+  "checklist": [
+    {
+      "item": "importer_identity",
+      "question": "Who is the importer and what is their TIN?",
+      "settled_by": "Invoice sold-to and B/L consignee agree"
+    },
+    {
+      "item": "exporter_and_origin",
+      "question": "Who is the exporter and what is the country of origin?",
+      "settled_by": "Invoice, certificate of origin"
+    },
+    {
+      "item": "goods_description_and_hs",
+      "question": "What are the goods and what HS code applies?",
+      "settled_by": "Invoice description; HS 6809.19 for plasterboard (gypsum articles, not faced only with paper)"
+    },
+    {
+      "item": "quantities",
+      "question": "How many packages, boards, and what gross and net weight?",
+      "settled_by": "Packing list; B/L gross weight must agree"
+    },
+    {
+      "item": "customs_value",
+      "question": "What is the invoice total, currency and incoterm, and the customs value in GMD?",
+      "settled_by": "Invoice total CIF Banjul x exchange rate"
+    },
+    {
+      "item": "transport_details",
+      "question": "Vessel, B/L number, container, ports?",
+      "settled_by": "Bill of lading"
+    },
+    {
+      "item": "cross_document_consistency",
+      "question": "Do weights, package counts, references and parties agree across all documents?",
+      "settled_by": "Comparison of invoice, packing list, B/L, CoO"
+    }
+  ]
+}
