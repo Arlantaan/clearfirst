@@ -1,0 +1,29 @@
+{
+  "about": "Ground truth for the verification layer's checklist check on cases/northbridge-v-caldera: what an investigation of this case must cover. Loaded only by load_reference in agent/verification/verify_checklist.py; never sent to the agent's model.",
+  "items": [
+    {
+      "id": "not_ready",
+      "question": "Do Caldera's own records show the system was not ready for go-live (failed tests, open critical defects, data conversion below target)?"
+    },
+    {
+      "id": "ready_statement",
+      "question": "Did Caldera tell Northbridge the system was ready?"
+    },
+    {
+      "id": "timing",
+      "question": "Did Caldera know the system was not ready before it said it was ready?"
+    },
+    {
+      "id": "seniority",
+      "question": "Were the people at Caldera who knew and who made the statement senior enough for it to count?"
+    },
+    {
+      "id": "signatures",
+      "question": "Was the key readiness certification signed by the person whose name is on it?"
+    },
+    {
+      "id": "counterevidence",
+      "question": "Is there evidence that weakens any of the points above?"
+    }
+  ]
+}

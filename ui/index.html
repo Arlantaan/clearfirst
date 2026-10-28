@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#f5f6f8; --panel:#fff; --ink:#1c1e21; --muted:#65676b; --line:#e4e6eb; --blue:#0866ff; --green:#1a7f37; --green-bg:#e6f4ea;
+          --red:#c62828; --red-bg:#fce8e6; --amber:#a15c00; --amber-bg:#fef3e0; --violet:#6b3fd1; --violet-bg:#f0eafd; --gray-bg:#f0f2f5; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  header { display:flex; align-items:center; gap:10px; padding:9px 16px; background:#1c2b33; color:#fff; position:sticky; top:0; z-index:5; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 6px 0 0; font-weight:600; }
+  header input[type=number] { width:56px; padding:5px 6px; border-radius:6px; border:0; }
+  header label { color:#cfd6db; font-size:13px; display:flex; gap:5px; align-items:center; }
+  .spacer { flex:1; }
+  button { font:inherit; padding:6px 12px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; } button.warn { background:var(--amber); border-color:var(--amber); color:#fff; }
+  button.ok { background:var(--green); border-color:var(--green); color:#fff; } button.danger { background:var(--red); border-color:var(--red); color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; background:var(--gray-bg); color:var(--muted); white-space:nowrap; }
+  .s-running{background:#e7f0ff;color:var(--blue)} .s-needs_input,.s-escalated{background:var(--amber-bg);color:var(--amber)} .s-awaiting_signoff{background:var(--violet-bg);color:var(--violet)}
+  .s-done,.s-proven,.s-approved{background:var(--green-bg);color:var(--green)} .s-answered,.s-unverified{background:#fff4d6;color:#7a5b00} .s-paused,.s-open{background:var(--gray-bg);color:var(--muted)}
+  .s-rejected,.s-error{background:var(--red-bg);color:var(--red)}
+  main { display:grid; grid-template-columns:270px minmax(0,1fr) 380px; gap:14px; padding:14px 16px; align-items:start; }
+  main > aside { position:sticky; top:62px; max-height:calc(100vh - 76px); overflow:auto; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+  .panel h2 { font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .muted{color:var(--muted)} .small{font-size:12px}
+  .metrics { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:10px; }
+  .metric { background:var(--gray-bg); border-radius:8px; padding:5px 9px; } .metric b{display:block;font-size:16px} .metric span{font-size:11px;color:var(--muted)}
+  .card-amber { border:2px solid var(--amber); background:var(--amber-bg); } .card-amber h2{color:var(--amber)}
+  .card-violet { border:2px solid var(--violet); background:var(--violet-bg); } .card-violet h2{color:var(--violet)}
+  .card-green { border:2px solid var(--green); background:var(--green-bg); } .card-green h2{color:var(--green)}
+  .card-yellow { border:2px solid #d6a700; background:#fffbea; } .card-yellow h2{color:#7a5b00}
+  .need { font-size:15px; font-weight:600; margin:4px 0 8px; }
+  .kv { display:grid; grid-template-columns:130px 1fr; gap:3px 10px; font-size:12.5px; margin:6px 0 10px; } .kv b{color:var(--muted);font-weight:600}
+  .steps { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  textarea { width:100%; font:inherit; font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); min-height:52px; }
+  #timeline { max-height:calc(100vh - 300px); min-height:240px; overflow:auto; padding-right:4px; }
+  .tb { border:1px solid var(--line); border-radius:8px; margin-bottom:8px; background:#fff; overflow:hidden; }
+  .tb-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:4px 10px; background:#f7f8fa; border-bottom:1px solid var(--line); font-size:12px; cursor:pointer; }
+  .tb-head:hover { background:#eef2f7; } .tb-head b { font-size:12.5px; } .tb-head .why { color:var(--blue); white-space:nowrap; }
+  .r { display:grid; grid-template-columns:70px 1fr auto; gap:8px; padding:5px 10px; align-items:baseline; font-size:13px; border-top:1px solid #f0f2f5; }
+  .r:first-of-type { border-top:0; } .r .t { font-weight:600; } .r .d { color:var(--muted); font-size:12.5px; word-break:break-word; } .r .rt { font-size:11.5px; color:var(--muted); white-space:nowrap; }
+  .r.k-ok { background:var(--green-bg); } .r.k-bad { background:var(--red-bg); } .r.k-esc { background:var(--amber-bg); } .r.k-sig { background:var(--violet-bg); }
+  .r.sys { grid-template-columns:1fr auto; background:#f7f8fa; } .r.sys .t { font-weight:600; }
+  .chip { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 0; border-radius:4px; text-align:center; }
+  .ph-plan { background:#efeefe; color:#4b4fd1; } .ph-act { background:#e7f0ff; color:var(--blue); } .ph-observe { background:#e6f4ea; color:var(--green); }
+  .toggle { color:var(--blue); cursor:pointer; font-size:11.5px; white-space:nowrap; }
+  .subs { padding:2px 10px 7px 88px; font-size:12px; color:var(--muted); } .subs div { padding:1px 0; }
+  .waiting { color:var(--muted); font-style:italic; font-weight:400 !important; }
+  pre { background:#1c2b33; color:#e4e6eb; padding:10px; border-radius:8px; overflow:auto; font-size:12px; max-height:360px; white-space:pre-wrap; margin:6px 0 0; grid-column:1/-1; }
+  .item { border-top:1px solid var(--line); padding:7px 0; } .item:first-of-type{border-top:0}
+  .item .head { display:flex; justify-content:space-between; gap:6px; align-items:center; font-weight:600; font-size:13px; }
+  .ck-q { font-size:12.5px; margin:2px 0 0; } .ck-e { font-size:11.5px; color:var(--muted); margin:1px 0 2px; }
+  .ck-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:3px; } .ck-tags .badge { font-size:10.5px; padding:0 6px; }
+  .ck-cov { font-size:12px; margin:-2px 0 8px; padding:5px 8px; border-radius:6px; }
+  .fact { font-size:12px; margin:4px 0 0 8px; } .fact .src{font-weight:600} .fact .q{font-style:italic}
+  .sig { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+  .sigbox { position:relative; border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff; }
+  .sigbox img { width:100%; display:block; } .sigbox .bx { position:absolute; border:2px solid var(--violet); background:rgba(107,63,209,.12); }
+  .sigbox .cap { font-size:11px; padding:3px 6px; background:#fafafa; border-top:1px solid var(--line); }
+  table.score { width:100%; border-collapse:collapse; font-size:12.5px; } table.score td{border-top:1px solid var(--line);padding:4px 6px;vertical-align:top}
+  .pass{color:var(--green);font-weight:700} .fail{color:var(--red);font-weight:700}
+  .finding { border-top:1px solid rgba(0,0,0,.07); padding:6px 0; font-size:12.5px; }
+  .finding.clickable { cursor:pointer; } .finding.clickable:hover { background:rgba(0,0,0,.03); }
+  ul.gaps { margin:4px 0 0 18px; padding:0; } ul.gaps li { margin:2px 0; }
+  @keyframes flash { from { box-shadow:0 0 0 3px var(--accent, #1f6feb); } to { box-shadow:0 0 0 0 transparent; } }
+  #checklist .item.flash { animation: flash 1.6s ease-out; }
+  .empty { color:var(--muted); padding:26px; text-align:center; }
+  .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#1c2b33; color:#fff; padding:9px 16px; border-radius:8px; display:none; z-index:9; max-width:80vw; }
+  .toast.err{background:var(--red)}
+  .vstatus { display:flex; align-items:center; gap:8px; margin:8px 0 2px; padding:7px 10px; border-radius:6px; background:var(--gray-bg); font-size:13px; }
+  .vstatus.err { background:var(--red-bg); color:var(--red); }
+  .spinner { width:14px; height:14px; border:2px solid #c9d1d9; border-top-color:var(--accent, #1f6feb); border-radius:50%; animation:spin .8s linear infinite; flex:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .vresult { margin-top:8px; padding:6px 8px; border-radius:6px; }
+  .vresult.fresh { animation: flash 2.4s ease-out; }
+  .vresult .when { color:var(--muted); font-size:12px; font-weight:normal; }
+  dialog { width:min(900px,90vw); border:0; border-radius:10px; padding:14px; } dialog pre{max-height:70vh}
+  a.file { color:var(--blue); cursor:pointer; text-decoration:underline; margin-right:10px; font-size:12px; }
+  select { font:inherit; font-size:12px; padding:3px; max-width:100%; }
+  header .case-pick select { font-size:13px; padding:4px 8px; border-radius:6px; border:0; background:#fff; color:var(--ink); max-width:360px; cursor:pointer; }
+  header .case-pick select:disabled { opacity:.6; cursor:default; }
+  .stepbar { margin:0 0 10px; padding:8px 10px; border-radius:8px; background:#e7f0ff; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:13px; }
+  .assignment { padding:0; overflow:hidden; }
+  .assignment > summary { list-style:none; display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; user-select:none;
+                          background:linear-gradient(180deg,#f9fafc,#f2f4f8); border-bottom:1px solid var(--line); }
+  .assignment > summary::-webkit-details-marker { display:none; }
+  .assignment:not([open]) > summary { border-bottom:0; }
+  .assignment .a-icon { width:26px; height:26px; border-radius:7px; display:grid; place-items:center; background:#e7f0ff; color:var(--blue); font-size:14px; flex:none; }
+  .assignment .a-title { font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .assignment .a-src { font-size:11.5px; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:999px; padding:1px 9px; white-space:nowrap; }
+  .assignment .a-src code { font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--ink); }
+  .assignment .a-chev { margin-left:auto; color:var(--muted); font-size:12px; transition:transform .15s ease; }
+  .assignment[open] .a-chev { transform:rotate(90deg); }
+  .objective { color:var(--ink); font-size:14px; line-height:1.6; padding:16px 22px 18px; max-width:78ch; }
+  .objective > :first-child { margin-top:0; }
+  .objective > :last-child { margin-bottom:0; }
+  .objective h1,.objective h2,.objective h3,.objective h4,.objective h5,.objective h6 { color:var(--ink); line-height:1.3; margin:18px 0 8px; }
+  .objective h1 { font-size:20px; font-weight:700; letter-spacing:-.01em; margin:0 0 12px; }
+  .objective h2 { font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding-top:14px; border-top:1px solid var(--line); }
+  .objective h3 { font-size:14.5px; }
+  .objective p { margin:8px 0; }
+  .objective p.callout { margin:10px 0; padding:9px 13px; background:#f5f8fe; border-left:3px solid var(--blue); border-radius:0 8px 8px 0; }
+  .objective p.callout strong:first-child { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--blue); margin-bottom:1px; }
+  .objective ul { list-style:none; margin:6px 0; padding:0; }
+  .objective ul li { position:relative; padding:3px 0 3px 22px; }
+  .objective ul li::before { content:""; position:absolute; left:6px; top:.85em; width:6px; height:6px; border-radius:50%; background:var(--blue); opacity:.75; }
+  .objective ol { margin:6px 0; padding-left:24px; } .objective ol li { padding:2px 0; }
+  .objective blockquote { margin:10px 0; padding:4px 12px; border-left:3px solid var(--line); color:var(--muted); }
+  .objective code { background:var(--gray-bg); border-radius:4px; padding:1px 5px; font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .objective pre code { background:none; padding:0; color:inherit; }
+  .objective a { color:var(--blue); }
+  .objective > p:last-child:not(.callout) { margin-top:14px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted); }
+  .tool { border-top:1px solid var(--line); padding:6px 0; font-size:12px; } .tool:first-child { border-top:0; } .tool code { font-weight:600; font-size:12.5px; } .tool .muted { margin-top:2px; }
+  .saw { font-size:12.5px; } .saw .box { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:6px 0; background:#fafbfc; }
+  .saw h3 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:10px 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent Console</h1>
+  <label class="case-pick" title="The case the agent works on (cases/ folder)">Case <select id="caseSel" onchange="selectCase(this.value)"><option>…</option></select></label>
+  <div class="spacer"></div>
+  <label title="Pause before every turn; click Next turn to continue"><input id="step" type="checkbox"> Step through turns</label>
+  <label>Turns <input id="turns" type="number" min="1" max="200" value="30"></label>
+  <button class="primary" id="startBtn" onclick="startRun()">▶ Start agent</button>
+  <button id="resetBtn" onclick="resetCase()">Reset case</button>
+</header>
+
+<main>
+  <aside>
+    <div class="panel"><h2>Tools Available</h2><div id="tools"><div class="muted small">Loading tools…</div></div></div>
+  </aside>
+
+  <section>
+    <details class="panel assignment" id="briefPanel" open>
+      <summary><span class="a-icon">📋</span><span class="a-title">The agent's assignment</span><span class="a-src">read from <code id="objSrc">objective.md</code></span><span class="a-chev">▶</span></summary>
+      <div id="brief" class="objective"><div class="muted small">Loading objective…</div></div>
+    </details>
+    <div id="cards"></div>
+    <div class="panel"><h2>Timeline <span class="small muted" style="text-transform:none;letter-spacing:0">click a turn to see what the model saw</span></h2>
+      <div id="stepbar"></div>
+      <div id="timeline"><div class="empty">Each turn appears here as Plan → Act → Observe.</div></div></div>
+    <div class="panel" id="runhead"><div class="muted small">No runs yet</div></div>
+  </section>
+
+  <aside>
+    <div class="panel"><h2>Checklist <span id="ckcount" class="badge"></span></h2><div id="checklist"><div class="muted small">—</div></div></div>
+    <div class="panel"><h2>Signature checks</h2><div id="sigs"><div class="muted small">No signatures checked yet</div></div></div>
+    <div class="panel"><h2>Plan</h2><ol id="plan" style="padding-left:18px;margin:0" class="small"><li class="muted">No plan yet</li></ol></div>
+    <div class="panel"><h2>Agent state</h2><div id="stateinfo" class="small muted">—</div><div style="margin-top:6px"><a class="file" onclick="showRaw('state')">Raw state</a><a class="file" onclick="showRaw('case')">Raw case record</a></div></div>
+  </aside>
+</main>
+
+<dialog id="dlg"><div style="display:flex;justify-content:space-between;align-items:center"><b id="dlgTitle"></b><button onclick="dlg.close()">Close</button></div><div id="dlgBody"></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+let selected = null, events = [], detail = null, info = {}, autoFollow = null;
+let verifyBusy = null, verifyError = null, verifyFresh = null;  // the Verify card's in-flight action, last error, just-updated result (each tagged with its run)
+window._open = new Set();
+const shownFailures = new Set();
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const short = (s, n = 140) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
+const time = ts => ts ? new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"}) : "";
+const asList = v => Array.isArray(v) ? v : (v && typeof v === "object" ? Object.values(v) : (v == null || v === "" ? [] : [v]));
+const idsOf = v => Array.isArray(v) ? v.map(x => (x && typeof x === "object") ? (x.id ?? x.name ?? JSON.stringify(x)) : x) : (v && typeof v === "object" ? Object.keys(v) : []);
+const txt = v => v == null ? "" : (typeof v === "string" ? v : (typeof v === "number" || typeof v === "boolean" ? String(v) : JSON.stringify(v)));
+const itemLabel = id => { const t = String(id ?? "").replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
+function inlineMarkdown(value) {
+  const code = [], links = [];
+  let html = esc(value).replace(/`([^`\n]+)`/g, (_, text) => `@@CODE${code.push(text) - 1}@@`);
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => `@@LINK${links.push({label, url}) - 1}@@`);
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  html = html.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>").replace(/(^|[^_])_([^_]+)_/g, "$1<em>$2</em>");
+  html = html.replace(/@@CODE(\d+)@@/g, (_, i) => `<code>${code[+i]}</code>`);
+  return html.replace(/@@LINK(\d+)@@/g, (_, i) => `<a href="${links[+i].url}" target="_blank" rel="noopener noreferrer">${links[+i].label}</a>`);
+}
+function renderMarkdown(value) {
+  const lines = String(value ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let paragraph = [], list = null;
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const html = inlineMarkdown(paragraph.join(" "));
+    // A paragraph that opens with a bold label ("**The question:** …") reads as a callout.
+    out.push(/^<strong>[^<]{1,40}:<\/strong>/.test(html) ? `<p class="callout">${html}</p>` : `<p>${html}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      flushParagraph(); closeList();
+      const block = [];
+      for (i += 1; i < lines.length && !/^```/.test(lines[i]); i++) block.push(lines[i]);
+      out.push(`<pre><code>${esc(block.join("\n"))}</code></pre>`);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) { flushParagraph(); closeList(); const level = heading[1].length; out.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`); continue; }
+    const bullet = line.match(/^\s*[-*+]\s+(.+)$/), numbered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (bullet || numbered) {
+      flushParagraph(); const next = bullet ? "ul" : "ol";
+      if (list !== next) { closeList(); out.push(`<${next}>`); list = next; }
+      out.push(`<li>${inlineMarkdown((bullet || numbered)[1])}</li>`);
+      continue;
+    }
+    const quote = line.match(/^>\s?(.*)$/);
+    if (quote) { flushParagraph(); closeList(); out.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`); continue; }
+    if (!line.trim()) { flushParagraph(); closeList(); continue; }
+    closeList(); paragraph.push(line.trim());
+  }
+  flushParagraph(); closeList();
+  return out.join("");
+}
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)};
+  const r = await fetch(path, opt); const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText); return j;
+}
+function toast(m, err) { const t = $("toast"); t.textContent = m; t.className = "toast" + (err ? " err" : ""); t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 4500); }
+async function selectCase(id) {
+  const current = (info.cases || []).find(c => c.path === info.case);
+  const target = (info.cases || []).find(c => c.id === id);
+  if (!target || (current && current.id === id)) return;
+  if (!confirm(`Switch to “${target.title}”?\n\nThe inbox is reset to ${target.path}/documents (runs are kept).`)) { renderCases(true); return; }
+  try {
+    info = await api("/api/case", {case: id});
+    selected = null; window._picked = false; window._briefKey = null; window._casesKey = null;
+    toast(`Case: ${target.title}`); refreshDocs(); poll();
+  } catch (e) { toast(e.message, true); renderCases(true); }
+}
+function renderCases(force) {
+  const sel = $("caseSel"), cases = info.cases || [];
+  if (!info.cases) { sel.innerHTML = "<option>restart ui.py</option>"; sel.disabled = true; sel.title = "The console server is older than this page: stop it and run python3 ui/ui.py again"; $("objSrc").textContent = "objective.md"; return; }
+  sel.title = "";
+  const key = JSON.stringify([cases, info.case]);
+  if (!force && window._casesKey === key) return;
+  if (!force && document.activeElement === sel) return;
+  window._casesKey = key;
+  const inList = cases.some(c => c.path === info.case);
+  sel.innerHTML = cases.map(c => `<option value="${esc(c.id)}" ${c.path === info.case ? "selected" : ""}>${esc(c.title)}</option>`).join("")
+    + (inList ? "" : `<option selected disabled>${esc(info.case || "no case")}</option>`);
+  $("objSrc").textContent = `${info.case}/objective.md`;
+}
+async function startRun() { try { await api("/api/runs", {turns: +$("turns").value || 30, step: $("step").checked}); autoFollow = "new"; toast("Agent started"); } catch (e) { toast(e.message, true); } }
+async function resumeRun(turns = 15) { try { await api(`/api/runs/${selected}/resume`, {turns, step: $("step").checked}); toast("Resuming the same run"); } catch (e) { toast(e.message, true); } }
+function setVerifyBusy(action) { verifyBusy = action ? {action, since: Date.now(), run: selected} : null; window._lastCards = null; renderCards(); }
+async function verifyRun(what) {
+  if (verifyBusy) return;
+  verifyError = null; setVerifyBusy(what);
+  try {
+    const r = await api(`/api/runs/${selected}/verify`, {what});
+    const problems = asList(r.rules).length + asList(r.claims).length;
+    verifyFresh = {run: selected, what}; setTimeout(() => { verifyFresh = null; }, 3000);
+    toast(what === "memo" ? `Memo check done: ${r.passed ? "passes" : `fails (${problems} problem${problems === 1 ? "" : "s"})`}`
+                          : `Checklist check done: ${r.passed ? "passes" : "fails"} · coverage ${pct(r.score)}`);
+  } catch (e) { verifyError = {run: selected, msg: `Could not verify the ${what}: ${e.message}`}; toast(verifyError.msg, true); }
+  finally { setVerifyBusy(null); poll(); }
+}
+async function branchRun() {
+  if (verifyBusy) return;
+  verifyError = null; setVerifyBusy("branch");
+  let r = null;
+  try { r = await api(`/api/runs/${selected}/branch`, {}); }
+  catch (e) { verifyError = {run: selected, msg: `Could not continue from the checklist: ${e.message}`}; toast(verifyError.msg, true); }
+  finally { setVerifyBusy(null); }
+  if (r) { toast(`Continued as a new run (${r.run_id}). Resume it to let the agent go on.`); select(r.run_id); }
+}
+async function releaseEvidence() { try { const r = await api("/api/release", {}); toast(r.message || "Released"); refreshDocs(); } catch (e) { toast(e.message, true); } }
+async function review(decision) {
+  const notes = ($("signoffNotes") || {}).value || "";
+  if (decision === "reject" && !notes.trim()) { toast("Add notes saying what to fix", true); return; }
+  try { await api(`/api/runs/${selected}/review`, {decision, notes}); toast(decision === "approve" ? "Approved" : "Rejected; sending back to the agent"); await resumeRun(10); } catch (e) { toast(e.message, true); }
+}
+async function answerRequest(requestId) {
+  const notes = ($("answerNotes") || {}).value || "";
+  if (!notes.trim()) { toast("Write the reply first", true); return; }
+  try { await api(`/api/runs/${selected}/review`, {decision: "answer", notes, request_id: requestId}); toast("Answered; resuming"); await resumeRun(15); } catch (e) { toast(e.message, true); }
+}
+async function resetCase() { if (!confirm("Reset the inbox to the initial release? (Runs are kept.)")) return; try { await api("/api/reset", {clear_runs:false}); toast("Case reset to the initial release"); refreshDocs(); } catch (e) { toast(e.message, true); } }
+async function nextTurn() { try { await api("/api/control", {next: true}); } catch (e) { toast(e.message, true); } }
+async function runToEnd() { try { await api("/api/control", {step: false}); $("step").checked = false; } catch (e) { toast(e.message, true); } }
+async function loadBrief() {
+  try {
+    const b = await api("/api/describe"); window._brief = b;
+    $("brief").innerHTML = renderMarkdown(b.objective);
+    $("tools").innerHTML = b.tools.map(t => `<div class="tool"><code>${esc(t.name)}</code><span class="muted">(${esc(t.parameters.join(", "))})</span><div class="muted">${esc(short(t.description, 150))}</div></div>`).join("");
+  } catch (e) { $("brief").textContent = e.message; }
+}
+function select(id) { if (!id) return; selected = id; events = []; detail = null; window._open = new Set(); window._tlKey = null; window._lastHead = null; $("timeline").innerHTML = ""; poll(); }
+
+function renderRuns(runs) { window._runs = runs; }
+
+async function refreshDocs() { try { window._docs = await api("/api/documents"); } catch (e) {} }
+
+const pct = v => typeof v === "number" ? `${Math.round(v * 100)}%` : "—";
+function describe(ev) {
+  const p = ev.payload || {}, k = ev.event_type, a = ev.actor;
+  switch (k) {
+    case "run_started": return {c:"k-run", i:"▶", t: p.resumed ? "Run resumed (same run)" : "Run started", d: p.released ? `New documents: ${p.released.join(", ") || "none"}` : (p.signoff ? `Sign-off: ${p.signoff}` : (p.turns ? `Turn limit ${p.turns}` : ""))};
+    case "model_request":
+      if (a === "agent") return {c:"k-tool minor", i:"◆", t: p.pending ? "Working on this turn…" : "Agent planning", d:`Turn ${p.turn ?? ""}`};
+      return {c:"k-tool minor", i:"◇", t: ({extract_text:"Files API: extract text", analyze:"Model API call: read document", compare_signature:"Model API call: compare signatures", sam_segment:"SAM 3.1: find signatures"})[p.purpose] || "Model API call", d: p.document_id ? `${p.document_id}${p.page ? " p" + p.page : ""}` : ""};
+    case "model_response": return {c:"k-tool minor", i:"◆", t:"Model responded", d:[(p.input_tokens || p.output_tokens) ? `${p.input_tokens||0} in / ${p.output_tokens||0} out` : "", p.boxes != null ? `${p.boxes} box(es)` : ""].filter(Boolean).join(" · ")};
+    case "file_uploaded": return {c:"k-tool minor", i:"⇪", t:`Uploaded ${p.document_id} to the Files API`, d:p.file_id};
+    case "text_extracted": return {c:"k-tool minor", i:"≡", t:`Saved ${p.document_id}'s text (${p.pages} pages): the source of truth`, d:""};
+    case "analysis": return {c:"k-tool minor", i:"✓", t:`${p.document_id}: ${p.records} evidence record(s), ${p.verified} verified`, d:""};
+    case "analysis_cached": return {c:"k-tool minor", i:"↺", t:`${p.document_id}: reused cached analysis`, d:""};
+    case "tool_call": {
+      if (a !== "agent") return {c:"k-tool minor", i:"⚙", t:p.tool_name, d:""};
+      const args = (p.arguments && typeof p.arguments === "object") ? p.arguments : {}; const n = p.tool_name;
+      let d = n === "record_fact" ? `${txt(args.item)} ← ${txt(args.document_id)} p${txt(args.page)}: “${short(txt(args.quote), 110)}”` : n === "analyze_document" ? `${asList(args.document_ids).map(txt).join(", ")} — ${short(txt(args.request), 80)}` : n === "check_signatures" ? `${txt(args.document_id)} p${txt(args.page)} · ${txt(args.signer)} · against ${txt(args.reference_document_id)} p${txt(args.reference_page)}` : n === "request_evidence" ? `${txt(args.item)}: ${short(txt(args.need), 140)}` : n === "flag_privileged" ? `${txt(args.document_id)}: ${short(txt(args.reason), 100)}` : n === "submit_memo" ? short(txt(args.conclusion), 140) : n === "update_plan" ? `${asList(args.plan).length} steps` : n === "set_checklist" ? `${asList(args.items).length} items: ${idsOf(args.items).map(txt).join(", ")}` : "";
+      return {c:"k-call", i:"⚙", t:`Calls ${n}`, d};
+    }
+    case "tool_result": {
+      if (a === "tool" && p.tool_name === undefined) return {c:"k-tool minor", i:"✓", t:"Tool result", d:""};
+      const r = p.result || {}, n = p.tool_name;
+      if (r.error && n === "set_checklist" && r.feedback !== undefined) return {c: "k-bad", i:"↩", t: "Checklist refused: feedback returned to the agent", d: short(txt(r.feedback), 240)};
+      if (r.error && n === "submit_memo") return {c: "k-bad minor", i:"↩", t: `Memo refused by the ${r.check === "claims" ? "claims check" : "memo rules"}: problems returned to the agent`, d: ""};
+      if (r.error && n === "record_fact") return {c: "k-bad minor", i:"↩", t: "Returned to the agent to correct", d: ""};
+      if (r.error) return {c: "k-bad", i:"✕", t: `${n} refused`, d: short(txt(r.error), 240)};
+      if (r.escalated) return {c:"k-esc minor", i:"!", t:"Escalation recorded; run pauses", d:""};
+      if (r.filed) return {c: r.memo === "unverified" ? "k-run" : "k-ok", i:"■", t: r.memo === "unverified" ? "Memo filed (unverified)" : "Memo filed for attorney sign-off", d:""};
+      if (r.recorded) return {c:"k-ok minor", i:"✓", t: typeof r.recorded === "object" ? `Fact ${txt(r.recorded.id)} recorded for ${txt(r.recorded.item)}` : "Fact recorded", d:""};
+      if (r.flagged) return {c:"k-esc minor", i:"⚑", t:`${txt(r.flagged.document_id ?? r.document_id ?? "")} flagged confidential`, d:""};
+      if (r.verdict) return {c:"k-sig", i:"✍", t:`Signature ${txt(r.verdict)}`, d:`${txt(r.document_id)} p${txt(r.page)}: ${short(txt(r.reason), 160)}`};
+      if (r.plan) return {c:"k-result minor", i:"☰", t:"Plan updated", d:""};
+      if (r.checklist) { const ids = idsOf(r.checklist); return {c:"k-ok minor", i:"☑", t:`Checklist set: ${ids.length} items`, d: ids.map(itemLabel).join(" · ")}; }
+      const docs = asList(r.documents);
+      if (docs.some(x => x && Array.isArray(x.evidence))) { const ev = docs.flatMap(x => asList(x && x.evidence)); const v = ev.filter(e => e && e.verified).length; return {c:"k-result", i:"✓", t:`Read ${docs.length} document(s): ${ev.length} evidence record(s), ${v} verified`, d: short(docs.flatMap(x => asList(x && x.evidence).slice(0,1).map(e => `${txt(e.document_id ?? x.document_id)} p${txt(e.page)}: “${txt(e.quote)}”`)).join(" | "), 240)}; }
+      if (r.documents) return {c:"k-result minor", i:"▤", t:`Listed ${docs.length} documents`, d:""};
+      return {c:"k-result", i:"←", t:`${n} result`, d: short(JSON.stringify(r), 200)};
+    }
+    case "verification":
+      if (p.check === "checklist") return p.passed ? {c:"k-ok", i:"✓", t:`Checklist check passed (coverage ${pct(p.score)})`, d:""} : {c: p.accepted ? "k-esc" : "k-bad", i:"✕", t:`Checklist check failed (coverage ${pct(p.score)})${p.accepted ? `: accepted after ${p.attempt} tries` : ""}`, d: short(txt(p.feedback), 240)};
+      if (p.check === "memo") return p.passed ? {c:"k-ok", i:"✓", t:"Memo rules passed: every item settled, every citation matches a recorded fact", d:""} : {c:"k-bad", i:"✕", t:"Memo rules failed", d: asList(p.problems).map(txt).join(" · ")};
+      if (p.check === "claims") return p.passed ? {c:"k-ok", i:"✓", t:"Claims check passed: every finding is supported by its quotes", d:""} : {c:"k-bad", i:"✕", t:"Claims check failed", d: asList(p.problems).map(txt).join(" · ")};
+      return p.passed ? {c:"k-ok minor", i:"✓", t:"Quote verified against the saved document text", d:""} : {c:"k-bad", i:"✕", t:"Quote rejected: not in the document", d: short(p.reason, 200)};
+    case "branched": return {c: p.passed ? "k-ok" : "k-bad", i:"⑂", t:`Continued from ${p.branched_from}'s checklist with verification on`, d: p.passed === null ? "" : (p.passed ? `Checklist check passed (coverage ${pct(p.score)})` : `Checklist refused (coverage ${pct(p.score)}): ${short(txt(p.feedback), 200)}`)};
+    case "flag": return {c:"k-esc minor", i:"⚑", t:`Confidential Doc/Info: ${p.document_id}`, d:"Excluded; never citable"};
+    case "escalation": return p.rule === "memo_signoff" ? {c:"k-sig", i:"✍", t:"Waiting for attorney sign-off", d:""} : {c:"k-esc", i:"!", t:`Escalated to a person (${p.rule}) · ${p.item}`, d: p.need};
+    case "resume_refused": return {c:"k-bad", i:"✕", t:"Resume refused", d:p.reason};
+    case "state_snapshot": return {c:"k-tool minor", i:"💾", t:"State saved", d:`turn ${p.turn} · ${p.status}`};
+    case "turn_summary": return null;
+    case "run_finished": return {c: p.status === "done" ? "k-ok" : (p.status === "needs_input" ? "k-esc" : (p.status === "awaiting_signoff" ? "k-sig" : "k-run")), i:"■", t:`Run stopped: ${p.status}`, d: ({needs_input:"Waiting for a person", paused:"Hit the turn limit", awaiting_signoff:"Memo waiting for sign-off", answered:"Memo filed without checks", done:"Signed off"})[p.status] || ""};
+    case "error": return {c:"k-bad", i:"✕", t:"Error", d: short(p.error, 240)};
+    default: return {c:"k-tool minor", i:"•", t:k, d: short(JSON.stringify(p), 140)};
+  }
+}
+
+const SYSTEM_EVENTS = new Set(["run_started", "run_finished", "resume_refused", "branched"]);
+function buildBlocks(evs) {
+  const blocks = []; let cur = null;
+  evs.forEach((ev, idx) => {
+    const p = ev.payload || {}, k = ev.event_type, item = {ev, idx};
+    if (k === "model_request" && ev.actor === "agent" && p.turn) { cur = {kind: "turn", turn: p.turn, items: [item]}; blocks.push(cur); return; }
+    if (SYSTEM_EVENTS.has(k)) { const b = {kind: "system", items: [item]}; blocks.push(b); cur = k === "run_started" ? b : null; return; }
+    if (!cur) { cur = {kind: "system", items: []}; blocks.push(cur); }
+    cur.items.push(item);
+  });
+  return blocks;
+}
+const rowClass = x => String((x && x.c) || "").replace(/ ?minor/, "");
+function phaseRow(phase, x, right = "") {
+  x = x || {};
+  return `<div class="r ${rowClass(x)}"><span class="chip ph-${phase}">${phase}</span><div><div class="t ${x.waiting ? "waiting" : ""}">${x.html || esc(x.t)}</div>${x.d ? `<div class="d">${esc(x.d)}</div>` : ""}</div><span class="rt">${right}</span></div>`;
+}
+function costText(p) { return p ? [(p.input_tokens || p.output_tokens) ? `${((p.input_tokens || 0) + (p.output_tokens || 0)).toLocaleString()} tokens` : ""].filter(Boolean).join(" · ") : ""; }
+function subSteps(result) {
+  // One line per document read (or per page SAM looked at), from what the tool returned.
+  const r = (result && (result.ev.payload || {}).result) || {};
+  const docs = asList(r.documents).filter(x => x && Array.isArray(x.evidence));
+  const lines = docs.map(x => { const v = x.evidence.filter(e => e && e.verified).length; return `<div>· <b>${esc(txt(x.document_id))}</b>: ${x.evidence.length} evidence record(s), ${v} verified${String(x.note || "").startsWith("error") ? ` <span>(${esc(short(txt(x.note), 120))})</span>` : ""}</div>`; });
+  if (Array.isArray(r.boxes) && r.document_id) lines.push(`<div>· <b>${esc(txt(r.document_id))}</b> p${esc(txt(r.page))}: SAM found ${r.boxes.length} signature box(es)</div>`);
+  return lines;
+}
+function observeOf(items, result) {
+  const esc_ = items.find(it => it.ev.event_type === "escalation");
+  const gate = [...items].reverse().find(it => it.ev.event_type === "verification" && ["memo", "claims"].includes((it.ev.payload || {}).check));
+  const ckv = items.find(it => it.ev.event_type === "verification" && (it.ev.payload || {}).check === "checklist");
+  if (ckv) { const p = ckv.ev.payload || {}, r = (result.ev.payload || {}).result || {}; return p.passed ? {c: "k-ok", t: `Checklist set (${idsOf(r.checklist).length} items); check passed (coverage ${pct(p.score)})`} : p.accepted ? {c: "k-esc", t: `Checklist accepted after ${p.attempt} tries (coverage ${pct(p.score)}); the attorney sees what it misses`, d: short(txt(p.feedback), 240)} : {c: "k-bad", t: `Checklist refused (coverage ${pct(p.score)}): feedback returned to the agent`, d: short(txt(r.feedback), 240)}; }
+  if (esc_) { const p = esc_.ev.payload || {}; return p.rule === "memo_signoff" ? {c: "k-sig", t: "Memo passed the memo rules and the claims check; waiting for attorney sign-off"} : {c: "k-esc", t: `Escalated to a person · ${itemLabel(p.item)} (${p.rule})`, d: p.need}; }
+  const x = describe(result.ev);
+  const gp = gate ? gate.ev.payload || {} : null;
+  if (gp && !gp.passed) return {c: "k-bad", t: `Memo refused by the ${gp.check === "claims" ? "claims check" : "memo rules"}: problems returned to the agent`, d: asList(gp.problems).map(txt).join(" · ")};
+  if ((result.ev.payload || {}).tool_name === "record_fact" && (result.ev.payload.result || {}).error) return {c: "k-bad", t: "Fact refused: returned to the agent to correct", d: short(txt(result.ev.payload.result.error), 200)};
+  return x;
+}
+function turnHtml(b) {
+  const items = b.items, first = items[0].ev;
+  const resp = items.find(it => it.ev.event_type === "model_response");
+  const callIdx = items.findIndex(it => it.ev.event_type === "tool_call" && it.ev.actor === "agent");
+  const call = callIdx >= 0 ? items[callIdx] : null;
+  const result = items.find(it => it.ev.event_type === "tool_result" && (it.ev.payload || {}).tool_name !== undefined);
+  const saved = items.some(it => it.ev.event_type === "state_snapshot");
+  let rows = "";
+  const chose = call ? "Agent planning" : (resp ? "Agent planning → answered in text (no tool call); asked again" : "");
+  rows += phaseRow("plan", resp ? {html: chose} : {t: "Working on this turn: the model is choosing, then the tool runs…", waiting: true}, resp ? esc(costText(resp.ev.payload)) : "");
+  if (call) {
+    const cx = describe(call.ev);
+    const subs = subSteps(result);
+    const key = String(b.turn), open = window._open.has(key);
+    const toggle = subs.length ? `<span class="toggle" onclick="event.stopPropagation();toggleTurn('${key}')">${open ? "▾ hide" : "▸ show"} details</span>` : "";
+    rows += phaseRow("act", {html: `<code>${esc(call.ev.payload.tool_name)}</code>`, d: cx.d}, toggle);
+    if (open && subs.length) rows += `<div class="subs">${subs.join("")}</div>`;
+    rows += result ? phaseRow("observe", observeOf(items, result)) : phaseRow("observe", {t: `Running ${call.ev.payload.tool_name}…`, waiting: true});
+  }
+  if ((first.payload || {}).pending) return `<div class="tb"><div class="tb-head"><span><b>Turn ${b.turn}</b></span></div>${rows}</div>`;
+  return `<div class="tb"><div class="tb-head" onclick="showTurn(${b.turn})"><span><b>Turn ${b.turn}</b> <span class="muted">${time(first.timestamp)}${saved ? " · saved" : ""}</span></span><span class="why">what the model saw ›</span></div>${rows}</div>`;
+}
+function systemHtml(b) {
+  return b.items.map(({ev}) => {
+    const x = describe(ev); if (!x || ev.event_type === "model_response" || ev.event_type === "state_snapshot") return "";
+    if (SYSTEM_EVENTS.has(ev.event_type)) return `<div class="tb"><div class="r sys ${rowClass(x)}"><div><span class="t">${esc(x.t)}</span>${x.d ? ` <span class="d">— ${esc(x.d)}</span>` : ""}</div><span class="rt">${time(ev.timestamp)}</span></div></div>`;
+    return `<div class="tb">${phaseRow("observe", x)}</div>`;
+  }).join("");
+}
+function blockHtml(b) {
+  try { return b.kind === "turn" ? turnHtml(b) : systemHtml(b); }
+  catch (e) {
+    console.error("timeline block failed to render", e, b);
+    const title = b.kind === "turn" ? `Turn ${b.turn}` : "Step";
+    return `<div class="tb"><div class="tb-head"><span><b>${title}</b> <span class="muted">could not be displayed (${esc(e.message)}); the run itself is unaffected</span></span>${b.kind === "turn" ? `<span class="why" onclick="showTurn(${b.turn})">what the model saw ›</span>` : ""}</div></div>`;
+  }
+}
+function renderTimeline() {
+  const tl = $("timeline");
+  const key = JSON.stringify(events).length + ":" + events.length + ":" + [...window._open].join(",");
+  if (window._tlKey === key) return;
+  const atBottom = !window._tlKey || tl.scrollHeight - tl.scrollTop - tl.clientHeight < 80;
+  tl.innerHTML = buildBlocks(events).map(blockHtml).join("") || `<div class="empty">Each turn appears here as Plan → Act → Observe.</div>`;
+  window._tlKey = key;
+  if (atBottom) tl.scrollTop = tl.scrollHeight;
+}
+function toggleTurn(key) { window._open.has(key) ? window._open.delete(key) : window._open.add(key); renderTimeline(); }
+function setEvents(all) { events = all || []; renderTimeline(); }
+function showTurn(n) {
+  const inTurn = events.filter(e => (e.payload || {}).turn === n);
+  const req = inTurn.find(e => e.event_type === "model_request" && e.actor === "agent");
+  const resp = inTurn.find(e => e.event_type === "model_response");
+  const calls = inTurn.filter(e => e.event_type === "tool_call" && e.actor === "agent");
+  const results = inTurn.filter(e => e.event_type === "tool_result" && (e.payload || {}).tool_name);
+  const saved = inTurn.find(e => e.event_type === "state_snapshot");
+  const w = (req && req.payload.saw) || null;
+  let saw = "<div class='muted'>Not saved yet.</div>";
+  if (w) {
+    const tools = ((window._brief || {}).tools || []).map(t => t.name);
+    saw = `<div class="box"><b>Instructions</b>: ${esc(short((detail || {}).instructions || "", 220))}</div>
+      <div class="box"><b>Conversation so far</b>: ${w.items} item(s) — ${Object.entries(w.counts || {}).map(([k, v]) => `${v} ${k}`).join(", ")}</div>
+      ${w.newest_observation ? `<div class="box"><b>Newest observation</b> (result of the previous tool call):<pre>${esc(w.newest_observation)}</pre></div>` : (w.newest_message ? `<div class="box"><b>Newest message</b>:<pre>${esc(w.newest_message)}</pre></div>` : "")}
+      ${tools.length ? `<div class="box"><b>Tools it could call</b>: ${tools.map(t => `<code>${esc(t)}</code>`).join(", ")}</div>` : ""}`;
+  }
+  const decided = calls.length ? calls.map(c => `<div class="box"><b>Called <code>${esc(c.payload.tool_name)}</code></b><pre>${esc(JSON.stringify(c.payload.arguments, null, 2))}</pre></div>`).join("") : "<div class='box'>No tool call: the model answered in text, so the loop asked it again.</div>";
+  const got = results.length ? results.map(r => `<div class="box"><b>${esc(r.payload.tool_name)}</b> returned:<pre>${esc(short(JSON.stringify(r.payload.result, null, 2), 1500))}</pre></div>`).join("") : "";
+  const cost = resp ? `<div class="muted">${resp.payload.input_tokens} in / ${resp.payload.output_tokens} out tokens</div>` : "";
+  dialog(`Turn ${n}: what the model saw and decided`, `<div class="saw"><h3>1 · What the model saw</h3>${saw}${cost}<h3>2 · What it decided</h3>${decided}<h3>3 · What the tool returned (fed back next turn)</h3>${got || "<div class='muted'>—</div>"}<h3>4 · After the turn</h3><div class="box">${saved ? `status <b>${esc(saved.payload.status)}</b> · ${((detail || {}).case || {}).facts ? detail.case.facts.length : 0} fact(s) recorded so far` : "—"}</div></div>`);
+}
+function dialog(title, html) { $("dlgTitle").textContent = title; $("dlgBody").innerHTML = html; $("dlg").showModal(); }
+function showRaw(which) { if (!detail) return; dialog(which === "state" ? "Agent state (from progress.json)" : "Case record", `<pre>${esc(JSON.stringify(which === "state" ? detail.state : detail.case, null, 2))}</pre>`); }
+
+function checklistSummary(cs) {
+  const ids = Object.keys(cs.checklist || {}), checks = cs.checklist_checks || [], last = checks[checks.length - 1];
+  const added = ids.filter(i => cs.checklist[i].added_after_check);
+  let s = `${ids.length} items drafted by the agent`;
+  if (last) s += last.passed ? `; ground-truth coverage ${pct(last.score)}${checks.length > 1 ? ` after ${checks.length - 1} refused draft(s)` : ""}` : `; accepted after ${last.attempt} tries at ${pct(last.score)} coverage: ${last.feedback || ""}`;
+  else s += "; not checked";
+  if (added.length) s += `; added after the check: ${added.map(itemLabel).join(", ")}`;
+  return s;
+}
+function factsFor(cs, item) { return (cs.facts || []).filter(f => f.item === item); }
+function citeHtml(c) { return `<div class="fact"><span class="src">${esc(c.document_id)} · p${esc(c.page)}</span> <span class="q">“${esc(short(c.quote, 180))}”</span></div>`; }
+
+function memoHtml(memo, cs) {
+  // The memo itself; each finding's evidence is in the checklist panel (click a finding to show it there).
+  const gaps = asList(memo.gaps).map(txt).join("\n").split(/\n+|;\s+(?=[A-Z])/).map(g => g.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  return `<div style="font-size:15px;font-weight:600;margin:2px 0 6px">${esc(txt(memo.conclusion))}</div>` +
+    asList(memo.findings).filter(f => f && typeof f === "object").map(f => { const n = asList(f.citations).length; return `<div class="finding clickable" onclick="showItem('${esc(txt(f.item))}')" title="Show this item's evidence in the checklist"><span class="badge s-${f.status === "proven" ? "proven" : (f.status === "escalated" ? "escalated" : "open")}">${esc(txt(f.status))}</span> <b>${esc(itemLabel(f.item))}</b> — ${esc(txt(f.summary))} <span class="muted small">${n} citation${n === 1 ? "" : "s"} ›</span></div>`; }).join("") +
+    (gaps.length ? `<div class="small" style="margin-top:8px"><b>Gaps</b><ul class="gaps">${gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul></div>` : "");
+}
+function setHtml(el, html) {
+  // Re-rendering on every poll would reset scroll position and highlights; only write when it changed.
+  if (el._html !== html) { el.innerHTML = html; el._html = html; }
+}
+function showItem(id) {
+  const el = document.querySelector(`#checklist .item[data-item="${CSS.escape(id)}"]`);
+  if (!el) return;
+  el.scrollIntoView({behavior: "smooth", block: "center"});
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+
+function renderCards() {
+  const d = detail, st = d.state || {}, cs = d.case || {}; let html = "";
+  const busy = !!d.job || (info.jobs || []).some(j => j.running);
+  if (d.status === "needs_input") {
+    const req = (cs.requests || []).filter(r => r.status === "open").slice(-1)[0] || {};
+    const withheld = window._docs ? window._docs.withheld : 0;
+    const isRelease = req.rule === "missing_evidence";
+    html += `<div class="panel card-amber"><h2>Handoff to the reviewer · the agent is waiting</h2>
+      <div class="need">“${esc(req.need || (st.pending || {}).need || "")}”</div>
+      <div class="kv"><b>Blocked item</b><span>${esc(itemLabel(req.item))}</span><b>Rule that fired</b><span>${esc(req.rule || "")}</span>
+      <b>What was checked</b><span>${(st.analyzed_ids || []).length} documents read (${(req.visible_ids || []).length} visible)</span>
+      <b>Evidence so far</b><span>${(cs.facts || []).length} verified fact(s): ${(cs.facts || []).map(f => esc(f.item)).join(", ") || "none"}</span></div>
+      <div class="small" style="margin-bottom:8px">The agent stopped instead of guessing and makes no model calls until a person acts.</div>
+      ${isRelease ? `<div class="steps"><button class="warn" ${withheld && !busy ? "" : "disabled"} onclick="releaseEvidence()">1 · Release follow-up evidence (${withheld})</button>
+        <button class="primary" ${!withheld && !busy ? "" : "disabled"} onclick="resumeRun(15)">2 · Resume this run</button></div>`
+      : `<textarea id="answerNotes" placeholder="Reply to the agent"></textarea><div class="steps" style="margin-top:6px"><button class="primary" ${busy ? "disabled" : ""} onclick="answerRequest('${esc(req.id)}')">Send reply and resume</button></div>`}</div>`;
+  }
+  const memo = cs.memo;
+  if (memo && memo.status === "awaiting_signoff" && d.status !== "running") {
+    const flags = cs.flags || [];
+    html += `<div class="panel card-violet"><h2>Attorney sign-off · memo waiting for you</h2>${memoHtml(memo, cs)}
+      <div class="kv" style="margin-top:8px"><b>Checklist</b><span>${esc(checklistSummary(cs))}</span></div>
+      ${flags.length ? `<div class="kv" style="margin-top:8px"><b>Flags to confirm</b><span>${flags.map(f => `${esc(f.kind === "privileged" ? "Confidential Doc/Info" : "Signature")}: ${esc(f.document_id)} — ${esc(short(f.reason, 120))}`).join("<br>")}</span></div>` : ""}
+      <textarea id="signoffNotes" placeholder="Notes (required to reject)"></textarea>
+      <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve memo</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Reject with notes</button></div></div>`;
+  } else if (memo && (memo.status === "approved" || d.status === "done")) {
+    html += `<div class="panel card-green"><h2>Signed-off memo</h2>${memoHtml(memo, cs)}</div>`;
+  } else if (memo && memo.status === "unverified") {
+    html += `<div class="panel card-yellow"><h2>Memo</h2>${memoHtml(memo, cs)}<div class="small" style="margin-top:6px">Would you sign off on this? Pick one finding and find the page that proves it in the checklist.</div></div>`;
+  } else if (memo && memo.status === "rejected") {
+    html += `<div class="panel card-amber"><h2>Memo rejected · back with the agent</h2><div class="small">${esc((memo.review || {}).notes)}</div></div>`;
+  }
+  if (!d.job && ["answered", "paused", "awaiting_signoff", "done", "needs_input"].includes(d.status) && !(d.state || {}).verification) {
+    const results = (d.verification || []).slice().reverse();
+    const when = r => r.at ? ` <span class="when">· checked ${esc(time(r.at))}</span>` : "";
+    const line = r => `<div class="kv vresult${verifyFresh && verifyFresh.run === d.id && verifyFresh.what === r.what ? " fresh" : ""}">` + (r.what === "memo"
+      ? `<b>Memo</b><span>${r.passed ? "✓ passes" : "✕ fails"}${when(r)}${[...asList(r.rules).map(p => `<br>· rule: ${esc(txt(p))}`), ...asList(r.claims).map(p => `<br>· claim: ${esc(txt(p))}`)].join("")}</span>`
+      : `<b>Checklist</b><span>${r.passed ? "✓ passes" : "✕ fails"} · ground-truth coverage ${pct(r.score)}${when(r)}${r.feedback ? `<br>Feedback the agent would get: ${esc(r.feedback)}` : ""}</span>`) + `</div>`;
+    const seen = new Set(); const latest = results.filter(r => !seen.has(r.what) && seen.add(r.what));
+    const pending = verifyBusy && verifyBusy.run === d.id ? verifyBusy.action : null;
+    const off = busy || verifyBusy ? "disabled" : "";
+    const label = (what, text, cls = "") => `<button class="${cls}" ${off} onclick="${what === "branch" ? "branchRun()" : `verifyRun('${what}')`}">${pending === what ? "Working…" : text}</button>`;
+    const status = pending === "memo" ? "Checking the memo: the memo rules, then the claims check (one Muse Spark call). Usually 10–30 seconds."
+      : pending === "checklist" ? "Checking the checklist against the case's ground truth (one Muse Spark call). Usually 10–30 seconds."
+      : pending === "branch" ? "Starting a new run from this run's checklist, with verification on. The checklist check runs first, then the new run opens here."
+      : "";
+    html += `<div class="panel"><h2>Verify this run</h2><div class="small" style="margin-bottom:6px">Run the verification checks on the work this run already did. The agent is not involved and the run is not changed. <b>Continue from the checklist</b> starts a new run with verification on, from this run's checklist.</div>
+      <div class="steps">${label("memo", "Verify the memo")}${label("checklist", "Verify the checklist")}${label("branch", "Continue from the checklist, verification on", "primary")}</div>
+      ${status ? `<div class="vstatus"><div class="spinner"></div><span>${status}</span></div>` : ""}
+      ${verifyError && verifyError.run === d.id && !pending ? `<div class="vstatus err">${esc(verifyError.msg)}</div>` : ""}
+      ${latest.length ? latest.map(line).join("") : (pending ? "" : `<div class="small muted" style="margin-top:8px">No checks run yet.</div>`)}</div>`;
+  }
+  if (d.status === "paused" && !d.job && d.branched_from && !(d.state || {}).turn) html += `<div class="panel card-violet"><h2>Continued from ${esc(d.branched_from)} · verification on</h2><div class="steps"><span class="small">The agent's Session 1 checklist went through the checklist check (see the timeline). Resume to let the agent continue from there.</span><button class="primary" onclick="resumeRun(30)">Resume this run</button></div></div>`;
+  else if (d.status === "paused" && !d.job) html += `<div class="panel"><h2>${d.error ? "Paused: the Model API call failed" : "Paused at the turn limit"}</h2><div class="steps"><span class="small">${d.error ? esc(short(d.error, 200)) : "Used all its turns without finishing or escalating."}</span><button onclick="resumeRun(15)">Resume with 15 more turns</button></div></div>`;
+  const keep = {}; for (const id of ["signoffNotes", "answerNotes"]) if ($(id)) keep[id] = $(id).value;
+  const focused = document.activeElement && document.activeElement.id;
+  if (window._lastCards === html) return;
+  window._lastCards = html;
+  $("cards").innerHTML = html;
+  for (const [id, v] of Object.entries(keep)) if ($(id)) $(id).value = v;
+  if (focused && $(focused)) $(focused).focus();
+}
+
+function zoomPage(doc, page, boxesJson) {
+  const boxes = JSON.parse(decodeURIComponent(boxesJson));
+  const bx = boxes.map(b => `<div class="bx" style="left:${b.x1 / (b.width || 850) * 100}%;top:${b.y1 / (b.height || 1100) * 100}%;width:${(b.x2 - b.x1) / (b.width || 850) * 100}%;height:${(b.y2 - b.y1) / (b.height || 1100) * 100}%"></div>`).join("");
+  dialog(`${decodeURIComponent(doc)} page ${page} · SAM boxes`, `<div class="sigbox" style="max-width:640px;margin:auto"><div style="position:relative"><img src="/api/page?doc=${doc}&page=${page}">${bx}</div></div>`);
+}
+
+function renderSide() {
+  const d = detail, st = d.state || {}, cs = d.case || {};
+  const ck = cs.checklist || {};
+  const ids = Object.keys(ck); const proven = ids.filter(i => ck[i].status === "proven").length;
+  $("ckcount").textContent = ids.length ? `${proven}/${ids.length} proven` : "";
+  const ckChecks = cs.checklist_checks || [], lastCk = ckChecks[ckChecks.length - 1];
+  const cov = !lastCk ? "" : lastCk.passed
+    ? `<div class="ck-cov" style="background:var(--green-bg);color:var(--green)">✓ Ground-truth coverage ${pct(lastCk.score)}${ckChecks.length > 1 ? ` (after ${ckChecks.length - 1} refused draft${ckChecks.length > 2 ? "s" : ""})` : ""}</div>`
+    : `<div class="ck-cov" style="background:var(--${lastCk.accepted ? "amber" : "red"}-bg);color:var(--${lastCk.accepted ? "amber" : "red"})">${lastCk.accepted ? "⚠ Accepted after " + lastCk.attempt + " tries" : "✕ Draft refused"} · ground-truth coverage ${pct(lastCk.score)}<div class="small">${esc(lastCk.feedback || "")}</div></div>`;
+  const sigFor = id => ck[id].needs_signature_check ? (cs.signature_checks || []).filter(c => c.verdict) : [];
+  setHtml($("checklist"), ids.length ? cov + ids.map(i => {
+    const e = ck[i];
+    const tags = [
+      e.added_after_check ? `<span class="badge s-escalated">added after check</span>` : "",
+      e.needs_signature_check ? `<span class="badge s-awaiting_signoff">signature check${sigFor(i).length ? ": " + esc(sigFor(i).map(c => c.verdict).join(", ")) : ""}</span>` : "",
+      e.request ? `<span class="badge s-escalated">request ${esc(e.request)}</span>` : "",
+    ].join("");
+    return `<div class="item" data-item="${esc(i)}"><div class="head"><span>${esc(itemLabel(i))}</span><span class="badge s-${esc(e.status)}">${esc(e.status)}</span></div>
+      ${e.question ? `<div class="ck-q">${esc(e.question)}</div>` : ""}${e.evidence_needed ? `<div class="ck-e">Settled by: ${esc(e.evidence_needed)}</div>` : ""}
+      ${tags ? `<div class="ck-tags">${tags}</div>` : ""}${factsFor(cs, i).map(citeHtml).join("")}</div>`;
+  }).join("") : cov + `<div class="muted small">No checklist yet. The agent drafts it first (set_checklist).</div>`);
+  const checks = cs.signature_checks || [];
+  const box = (b, w = 850, h = 1100) => `<div class="bx" style="left:${b.x1 / (b.width || w) * 100}%;top:${b.y1 / (b.height || h) * 100}%;width:${(b.x2 - b.x1) / (b.width || w) * 100}%;height:${(b.y2 - b.y1) / (b.height || h) * 100}%"></div>`;
+  const pageBox = (doc, page, boxes, cap) => `<div class="sigbox"><div style="position:relative"><img src="/api/page?doc=${encodeURIComponent(doc)}&page=${page}" loading="lazy" onclick="zoomPage('${encodeURIComponent(doc)}', ${page}, '${encodeURIComponent(JSON.stringify(boxes || []))}')" style="cursor:zoom-in">${(boxes || []).map(b => box(b)).join("")}</div><div class="cap">${cap}</div></div>`;
+  const sh = checks.map(c => `<div class="small" style="margin-top:8px"><span class="badge s-${c.verdict === "consistent" ? "proven" : "rejected"}">${esc(c.verdict)}</span> ${esc(c.signer)} · ${esc(c.document_id)} p${c.page}</div>
+    <div class="sig">${c.reference ? pageBox(c.reference.document_id, c.reference.page, c.reference.boxes, "reference") : "<div></div>"}${pageBox(c.document_id, c.page, c.boxes, "questioned")}</div><div class="small muted">${esc(c.reason)}</div>`).join("");
+  $("sigs").innerHTML = sh || `<div class="muted small">No signatures checked yet</div>`;
+  const plan = st.plan || [];
+  $("plan").innerHTML = plan.length ? plan.map(s => `<li>${esc(s)}</li>`).join("") : `<li class="muted">No plan yet</li>`;
+  const skip = new Set(["plan", "case", "analyzed_ids", "objective"]);
+  $("stateinfo").innerHTML = Object.entries(st).filter(([k]) => !skip.has(k)).map(([k, v]) => `<div><b>${esc(k)}</b>: ${esc(short(typeof v === "string" ? v : JSON.stringify(v), 150))}</div>`).join("") || "—";
+}
+
+function renderHead() {
+  const d = detail, m = d.metrics, st = d.state || {};
+  const running = d.status === "running";
+  const ctl = info.control || {};
+  const stepHtml = running && ctl.step ? `<div class="stepbar">${ctl.waiting ? `⏸ <b>Paused before turn ${(st.turn || 0) + 1}.</b> Explain what just happened, then` : "▶ Running one turn…"} <button class="primary" ${ctl.waiting ? "" : "disabled"} onclick="nextTurn()">Next turn ▶</button><button onclick="runToEnd()">Run to end</button></div>` : "";
+  if ($("stepbar").innerHTML !== stepHtml) $("stepbar").innerHTML = stepHtml;
+  const runs = window._runs || [];
+  const picker = `<select onchange="select(this.value)" title="Run">${runs.map(r => `<option value="${esc(r.id)}" ${r.id === d.id ? "selected" : ""}>${esc(r.id)} (${esc(r.status)})</option>`).join("")}</select>`;
+  const metric = (v, label, color) => `<div class="metric"><b${color ? ` style="color:${color}"` : ""}>${v}</b><span>${label}</span></div>`;
+  const html = `<h2>Run</h2>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${picker} <span class="badge s-${esc(d.status)}">${esc(d.status)}</span></div>
+    <div class="metrics">
+      ${metric(m.agent_turns, "agent turns")}${metric(m.tool_calls, "tool calls")}${metric(m.tokens.toLocaleString(), "agent tokens")}
+      ${metric(((d.case || {}).facts || []).length, "facts recorded")}${metric(m.rejected, "checks failed", m.rejected ? "var(--red)" : "")}${metric(m.escalations, "escalations", m.escalations ? "var(--amber)" : "")}${metric(((d.case || {}).flags || []).length, "flags")}
+    </div>${d.job ? `<details style="margin-top:8px" ${window._termOpen ? "open" : ""} ontoggle="window._termOpen=this.open"><summary class="small muted">Terminal output (one line per turn)</summary><pre>${esc(d.job.log || "…")}</pre></details>` : ""}`;
+  if (window._lastHead === html) return;
+  if (document.activeElement && document.activeElement.tagName === "SELECT" && $("runhead").contains(document.activeElement)) return;
+  window._lastHead = html; $("runhead").innerHTML = html;
+}
+
+async function poll() {
+  try {
+    info = await api("/api/info");
+    if (!info.workshop) { $("brief").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("tools").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("startBtn").disabled = true; return; }
+    const briefKey = info.workshop + ":" + info.case + ":" + info.verification + ":" + info.agent_ready;
+    if (window._briefKey !== briefKey) { window._briefKey = briefKey; loadBrief(); }
+    renderCases();
+    if ($("step").dataset.init !== "1" && info.control) { $("step").checked = !!info.control.step; $("step").dataset.init = "1"; }
+    const running = (info.jobs || []).some(j => j.running);
+    $("startBtn").disabled = running || !info.agent_ready; $("resetBtn").disabled = running; $("caseSel").disabled = running || !info.cases;
+    const last = (info.jobs || []).slice(-1)[0];
+    if (last && last.run_id && last.running && last.run_id !== selected && autoFollow) { autoFollow = null; select(last.run_id); return; }
+    if (last && !last.running && last.returncode && !last.run_id && !shownFailures.has(last.id)) { shownFailures.add(last.id); toast(`Agent failed: ${short(last.log, 220)}`, true); }
+    const runs = await api("/api/runs"); renderRuns(runs);
+    if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press ▶ Start agent${info.agent_ready ? "" : " (build legal_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
+    if (!selected && runs.length && !window._picked) { window._picked = true; select(runs[0].id); return; }
+    if (selected) {
+      const d = await api(`/api/runs/${selected}`);
+      detail = d;
+      for (const [name, render] of [["timeline", () => setEvents(d.events)], ["run panel", renderHead], ["cards", renderCards], ["sidebar", renderSide]]) {
+        try { render(); } catch (e) { console.error(`console: ${name} failed to render`, e); }
+      }
+    }
+  } catch (e) { /* server restarting */ }
+}
+refreshDocs(); poll(); setInterval(poll, 1200); setInterval(refreshDocs, 3000);
+</script>
+</body>
+</html>
