@@ -54,6 +54,23 @@ ITEM_FIELDS = (
     "item_value",
 )
 
+BROKER_DECLARED = ("declaration_type", "procedure_code")
+
+
+def _header_value(header: dict, path: str):
+    """header["importer"]["tin"] for path "importer.tin"; None when absent."""
+    value = header
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _is_blank(value) -> bool:
+    """Missing, or a string with nothing in it. Numbers (even 0) count as present."""
+    return value is None or (isinstance(value, str) and not value.strip())
+
 
 class CaseError(ValueError):
     """A write the case record refused. The message is safe to show the model."""
@@ -412,8 +429,10 @@ class CaseRecord:
     def file_declaration(self, declaration: dict, status: str) -> dict:
         """File the SAD declaration (header, items, discrepancies, open_questions).
 
-        Refused unless every header field and every item field is cited (1-3 quotes
-        copied exactly from an analyzed page) or named in discrepancies/open_questions.
+        Refused unless every header box is filled, and every other header field and
+        every item field is cited (1-3 quotes copied exactly from an analyzed page)
+        or named in discrepancies/open_questions. declaration_type and procedure_code
+        are the broker's choice and take no citation.
         """
         header = declaration.get("header") if isinstance(declaration, dict) else None
         items = declaration.get("items") if isinstance(declaration, dict) else None
@@ -444,8 +463,30 @@ class CaseRecord:
         citations = header.get("citations") or {}
         if not isinstance(citations, dict):
             raise CaseError("header citations must be an object keyed by field path")
+        broker_cited = [p for p in BROKER_DECLARED if citations.get(p)]
+        if len(broker_cited) == 1:
+            raise CaseError(
+                f"{broker_cited[0]} is declared by the broker and takes no "
+                "citation; remove its citations"
+            )
+        if broker_cited:
+            raise CaseError(
+                f"{', '.join(broker_cited)} are declared by the broker and take "
+                "no citation; remove their citations"
+            )
+        missing_values = [
+            p for p in HEADER_FIELDS if _is_blank(_header_value(header, p))
+        ]
+        if missing_values:
+            raise CaseError(
+                "missing header values for: "
+                + ", ".join(missing_values)
+                + "; fill every header box"
+            )
         missing = []
         for path in HEADER_FIELDS:
+            if path in BROKER_DECLARED:
+                continue
             cites = citations.get(path) or []
             if cites:
                 self._check_citations(cites, f"header {path}")

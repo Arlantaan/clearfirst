@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from agent_kit.case_record import HEADER_FIELDS, ITEM_FIELDS
+from agent_kit.case_record import BROKER_DECLARED, HEADER_FIELDS, ITEM_FIELDS
 from agent_kit.tools import check_signatures
 from tests.fake_model import Scripted, ScriptedModel
 
@@ -119,7 +119,7 @@ CITE = {
 }
 
 
-def _header_values() -> dict:
+def header_values() -> dict:
     return {
         "declaration_type": "SAD",
         "procedure_code": "IM4",
@@ -155,8 +155,10 @@ def _item_values() -> dict:
 
 def cited_declaration() -> dict:
     """New-shape declaration args with every field cited (needs DOC-MINUTES analyzed)."""
-    header = _header_values()
-    header["citations"] = {path: [dict(CITE)] for path in HEADER_FIELDS}
+    header = header_values()
+    header["citations"] = {
+        path: [dict(CITE)] for path in HEADER_FIELDS if path not in BROKER_DECLARED
+    }
     item = _item_values()
     item["citations"] = [dict(CITE)]
     return {
@@ -172,10 +174,10 @@ def cited_declaration() -> dict:
 DECLARATION = (
     "submit_declaration",
     {
-        "header": _header_values(),
+        "header": header_values(),
         "items": [_item_values()],
         "discrepancies": [],
-        "open_questions": list(HEADER_FIELDS)
+        "open_questions": [p for p in HEADER_FIELDS if p not in BROKER_DECLARED]
         + [f"items[0].{field}" for field in ITEM_FIELDS],
     },
 )

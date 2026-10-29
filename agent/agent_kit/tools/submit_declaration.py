@@ -1,8 +1,10 @@
 """submit_declaration: file the SAD declaration (IM4).
 
-The declaration is header, items, discrepancies, open_questions. Every header
-field and every item field must be cited (1-3 exact quotes each) or named in
-discrepancies/open_questions, or the filing is refused naming the missing fields.
+The declaration is header, items, discrepancies, open_questions. Every header box
+must be filled; every other header field and every item field must be cited (1-3
+exact quotes each) or named in discrepancies/open_questions, or the filing is
+refused naming the missing fields. declaration_type and procedure_code are the
+broker's choice and take no citation.
 
 Verification off: the declaration is filed unverified and the run ends (answered).
 Verification on: the declaration rules (verification/verify_declaration.py) run first,
@@ -91,8 +93,10 @@ HEADER = {
         "citations": {
             "type": "object",
             "description": "1-3 citations per header field path "
-            "(declaration_type, importer.name, importer.tin, transport.bl_number, ...). "
-            "A field with no citations must be named in discrepancies or open_questions.",
+            "(importer.name, importer.tin, transport.bl_number, ...). "
+            "A field with no citations must be named in discrepancies or open_questions. "
+            "declaration_type and procedure_code are the broker's choice: fill them, "
+            "never cite them.",
             "additionalProperties": CITATION_LIST,
         },
     },
@@ -156,8 +160,9 @@ DEFINITION = {
     "type": "function",
     "name": "submit_declaration",
     "description": "File the SAD declaration: header boxes with per-field citations, goods items with "
-    "HS codes and citations, discrepancies where documents disagree, and open questions. Every header "
-    "and item field must be cited (1-3 quotes) or named in discrepancies/open_questions.",
+    "HS codes and citations, discrepancies where documents disagree, and open questions. Fill every "
+    "header box; every other header and item field must be cited (1-3 quotes) or named in "
+    "discrepancies/open_questions. declaration_type and procedure_code take no citation.",
     "parameters": {
         "type": "object",
         "additionalProperties": False,

@@ -256,6 +256,28 @@ class KitTest(unittest.TestCase):
         record = case.file_declaration(args, "unverified")
         self.assertEqual("unverified", record["status"])
 
+    def test_filed_declaration_round_trips_header_values(self) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        record = case.file_declaration(support.cited_declaration(), "unverified")
+        header = record["header"]
+        self.assertEqual("SAD", header["declaration_type"])
+        self.assertEqual("SE5566778899", header["importer"]["tin"])
+        self.assertEqual("BL123456", header["transport"]["bl_number"])
+        self.assertEqual(10000, header["valuation"]["invoice_total"])
+        self.assertIn("importer.tin", header["citations"])
+
+    def test_broker_declared_fields_take_no_citation(self) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        for field in ("procedure_code", "declaration_type"):
+            args = support.cited_declaration()
+            args["header"]["citations"][field] = [dict(support.CITE)]
+            with self.assertRaisesRegex(
+                CaseError, f"{field} is declared by the broker"
+            ):
+                case.file_declaration(args, "unverified")
+
     def test_declaration_refuses_missing_fields_bad_quotes_and_excluded_docs(
         self,
     ) -> None:
@@ -264,7 +286,7 @@ class KitTest(unittest.TestCase):
         with self.assertRaisesRegex(CaseError, "importer\\.tin"):
             case.file_declaration(
                 {
-                    "header": {},
+                    "header": support.header_values(),
                     "items": [],
                     "discrepancies": [],
                     "open_questions": [],
@@ -274,13 +296,17 @@ class KitTest(unittest.TestCase):
         with self.assertRaisesRegex(CaseError, r"items\[0\]\.gross_kg"):
             case.file_declaration(
                 {
-                    "header": {},
+                    "header": support.header_values(),
                     "items": [{}],
                     "discrepancies": [],
                     "open_questions": list(case_record.HEADER_FIELDS),
                 },
                 "unverified",
             )
+        args = support.cited_declaration()
+        del args["header"]["importer"]["tin"]
+        with self.assertRaisesRegex(CaseError, "missing header values for.*importer\\.tin"):
+            case.file_declaration(args, "unverified")
         args = support.cited_declaration()
         args["header"]["citations"]["importer.tin"][0]["quote"] = (
             "The vendor admitted it was broken"
