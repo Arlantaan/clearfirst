@@ -39,8 +39,7 @@ def verify_declaration(ctx: tools.Context) -> dict:
     if not filed:
         raise RuntimeError(f"{ctx.run_id} has no declaration to verify")
     declaration = {
-        k: filed.get(k, "" if k != "findings" else [])
-        for k in ("conclusion", "findings", "gaps")
+        k: filed.get(k) for k in ("header", "items", "discrepancies", "open_questions")
     }
     rules = importlib.import_module("verification.verify_declaration").run_verification(
         ctx, declaration

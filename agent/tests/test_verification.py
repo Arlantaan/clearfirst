@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import unittest
+from unittest import mock
 
 from agent_kit import tools
 from agent_kit.case_record import CaseRecord
@@ -19,7 +20,7 @@ from tests import support
 ALL_INITIAL = list(support.INITIAL)
 READ_ALL = (
     "analyze_document",
-    {"document_ids": ALL_INITIAL, "request": "readiness, statements, signatures"},
+    {"document_ids": ALL_INITIAL, "request": "invoice, packing, transport and signatures"},
 )
 FLAG = (
     "flag_excluded",
@@ -29,49 +30,49 @@ FACTS = [
     (
         "record_fact",
         {
-            "item": "not_ready",
-            "document_id": "DOC-REPORT",
-            "page": 1,
-            "quote": "Open Severity 1 defects: 21",
-            "claim": "21 Sev-1 open",
-        },
-    ),
-    (
-        "record_fact",
-        {
-            "item": "ready_statement",
+            "item": "importer",
             "document_id": "DOC-MINUTES",
             "page": 1,
             "quote": "Mr. Lindgren confirmed the system is ready for go-live",
-            "claim": "said ready",
+            "claim": "importer confirmed",
         },
     ),
     (
         "record_fact",
         {
-            "item": "seniority",
+            "item": "exporter_origin",
             "document_id": "DOC-MINUTES",
             "page": 1,
             "quote": "Erik Lindgren, Engagement Partner",
-            "claim": "engagement partner",
+            "claim": "exporter named",
         },
     ),
     (
         "record_fact",
         {
-            "item": "counterevidence",
+            "item": "goods",
+            "document_id": "DOC-REPORT",
+            "page": 1,
+            "quote": "Weekly status report",
+            "claim": "goods described",
+        },
+    ),
+    (
+        "record_fact",
+        {
+            "item": "valuation",
             "document_id": "DOC-REPORT",
             "page": 1,
             "quote": "Overall status is green",
-            "claim": "reported green",
+            "claim": "value stated",
         },
     ),
 ]
 ASK = (
     "request_evidence",
     {
-        "item": "timing",
-        "need": "Internal vendor readiness assessments dated before the go-live decision.",
+        "item": "transport",
+        "need": "Vessel, B/L number, container and port details for the shipment.",
     },
 )
 AFTER_RELEASE = [
@@ -79,17 +80,17 @@ AFTER_RELEASE = [
         "analyze_document",
         {
             "document_ids": ["DOC-DRAFT", "DOC-CERT"],
-            "request": "what the vendor knew and who signed",
+            "request": "arrival documents and who signed",
         },
     ),
     (
         "record_fact",
         {
-            "item": "timing",
-            "document_id": "DOC-DRAFT",
+            "item": "transport",
+            "document_id": "DOC-CERT",
             "page": 1,
-            "quote": "Recommendation: NO-GO",
-            "claim": "internal no-go before the statement",
+            "quote": "UAT Phase 2 exit certification",
+            "claim": "transport certified",
         },
     ),
     (
@@ -115,52 +116,102 @@ AFTER_RELEASE = [
 ]
 
 
-def cite(item, doc, quote):
+SAD_QUESTIONS = [
+    ("importer", "Who is the importer and what is their TIN?", False),
+    (
+        "exporter_origin",
+        "Who is the exporter and what is the country of origin?",
+        False,
+    ),
+    (
+        "goods",
+        "What are the goods, their HS code, packages, weights and quantity?",
+        False,
+    ),
+    (
+        "valuation",
+        "What is the invoice total, currency, incoterm and customs value?",
+        False,
+    ),
+    (
+        "transport",
+        "What vessel, B/L number, container and ports move the shipment?",
+        False,
+    ),
+    ("signatures", "Is the certificate signed by the named person?", True),
+]
+
+
+def _sad_items(without=()):
+    return [
+        {
+            "id": item_id,
+            "question": question,
+            "evidence_needed": f"A document showing {item_id}",
+            "needs_signature_check": signature,
+        }
+        for item_id, question, signature in SAD_QUESTIONS
+        if item_id not in without
+    ]
+
+
+SAD_CHECKLIST = ("set_checklist", {"items": _sad_items()})
+SAD_PARTIAL = ("set_checklist", {"items": _sad_items(without=("signatures",))})
+
+# Stand-in for the unbuilt checklist judge (verification/verify_checklist.py):
+# run tests patch the check with these so the declaration flow can be tested.
+CHECKLIST_PASS = {"passed": True, "score": 1.0, "feedback": ""}
+CHECKLIST_FAIL = {
+    "passed": False,
+    "score": 0.83,
+    "feedback": "The checklist leaves out the transport leg: name the vessel, "
+    "documents and ports that would settle it.",
+}
+
+
+def _cite(document_id, quote):
+    return {"document_id": document_id, "page": 1, "quote": quote}
+
+
+def _good_declaration_args():
+    header = support.header_values()
+    importer = _cite("DOC-MINUTES", "Mr. Lindgren confirmed the system is ready for go-live")
+    exporter = _cite("DOC-MINUTES", "Erik Lindgren, Engagement Partner")
+    transport = _cite("DOC-CERT", "UAT Phase 2 exit certification")
+    valuation = _cite("DOC-REPORT", "Overall status is green")
+    header["citations"] = {
+        "importer.name": [importer],
+        "importer.tin": [importer],
+        "exporter.name": [exporter],
+        "exporter.country": [exporter],
+        "transport.vessel": [transport],
+        "transport.bl_number": [transport],
+        "transport.container": [transport],
+        "transport.port_of_loading": [transport],
+        "transport.port_of_discharge": [transport],
+        "valuation.incoterm": [valuation],
+        "valuation.currency": [valuation],
+        "valuation.invoice_total": [valuation],
+    }
+    item = support.cited_declaration()["items"][0]
+    item["citations"] = [_cite("DOC-REPORT", "Weekly status report")]
     return {
-        "item": item,
-        "status": "proven",
-        "summary": item,
-        "citations": [{"document_id": doc, "page": 1, "quote": quote}],
+        "header": header,
+        "items": [item],
+        "discrepancies": [],
+        "open_questions": [
+            "importer.name",
+            "valuation.invoice_total",
+            "items[0].gross_kg",
+            "items[0].net_kg",
+            "items[0].packages",
+            "items[0].hs_code",
+        ],
     }
 
 
-GOOD_DECLARATION = (
-    "submit_declaration",
-    {
-        "conclusion": "Yes.",
-        "gaps": "None.",
-        "findings": [
-            cite("not_ready", "DOC-REPORT", "Open Severity 1 defects: 21"),
-            cite(
-                "ready_statement",
-                "DOC-MINUTES",
-                "Mr. Lindgren confirmed the system is ready for go-live",
-            ),
-            cite("timing", "DOC-DRAFT", "Recommendation: NO-GO"),
-            cite("seniority", "DOC-MINUTES", "Erik Lindgren, Engagement Partner"),
-            cite(
-                "signatures",
-                "DOC-CERT",
-                "I certify that all exit criteria have been satisfied",
-            ),
-            cite("counterevidence", "DOC-REPORT", "Overall status is green"),
-        ],
-    },
-)
-EARLY_DECLARATION = (
-    "submit_declaration",
-    {
-        "conclusion": "Yes.",
-        "gaps": "",
-        "findings": [
-            cite(
-                "timing",
-                "DOC-MINUTES",
-                "Mr. Lindgren confirmed the system is ready for go-live",
-            )
-        ],
-    },
-)
+GOOD_DECLARATION = ("submit_declaration", _good_declaration_args())
+EARLY_DECLARATION = support.DECLARATION
 
 
 SKIP = unittest.skipUnless(
@@ -563,7 +614,14 @@ class VerifiedRunTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
 
     def initial(self) -> list:
-        return [support.CHECKLIST, READ_ALL, FLAG, *FACTS, EARLY_DECLARATION, ASK]
+        return [SAD_CHECKLIST, READ_ALL, FLAG, *FACTS, EARLY_DECLARATION, ASK]
+
+    def passing_checklist(self):
+        """Patch the unbuilt checklist judge to pass (declaration flow tests)."""
+        return mock.patch(
+            "verification.verify_checklist.run_verification",
+            return_value=dict(CHECKLIST_PASS),
+        )
 
     def tool_results(self, run_id: str, name: str) -> list:
         return [
@@ -571,7 +629,7 @@ class VerifiedRunTest(unittest.TestCase):
         ]
 
     def test_verification_tools_are_offered(self) -> None:
-        fake = support.scripted(self.root, [support.CHECKLIST])
+        fake = support.scripted(self.root, [SAD_CHECKLIST])
         self.run_agent(root=self.root, client=fake.client, turns=1)
         offered = {t["name"] for t in support.first_agent_request(fake)["tools"]}
         self.assertTrue(
@@ -579,24 +637,29 @@ class VerifiedRunTest(unittest.TestCase):
         )
 
     def test_an_incomplete_checklist_gets_feedback_not_the_ground_truth(self) -> None:
-        fake = support.scripted(
-            self.root, [support.PARTIAL_CHECKLIST, support.CHECKLIST, READ_ALL]
-        )
-        result = self.run_agent(root=self.root, client=fake.client, turns=3)
+        fake = support.scripted(self.root, [SAD_PARTIAL, SAD_CHECKLIST, READ_ALL])
+        with mock.patch(
+            "verification.verify_checklist.run_verification",
+            side_effect=[dict(CHECKLIST_FAIL), dict(CHECKLIST_PASS)],
+        ):
+            result = self.run_agent(root=self.root, client=fake.client, turns=3)
         refused = self.tool_results(result["run_id"], "set_checklist")[0]
         self.assertEqual({"error", "feedback"}, set(refused))
         sent = json.dumps(support.agent_requests(fake))
-        self.assertFalse([q for q in GROUND_TRUTH_TEXT if q in sent])
+        self.assertIn(CHECKLIST_FAIL["feedback"], sent)
         self.assertNotIn("score", sent)
         case = support.case(self.root, result["run_id"])
         self.assertEqual([False, True], [c["passed"] for c in case["checklist_checks"]])
         self.assertAlmostEqual(0.83, case["checklist_checks"][0]["score"], places=2)
-        self.assertTrue(case["checklist"]["seniority"]["added_after_check"])
+        self.assertTrue(case["checklist"]["signatures"]["added_after_check"])
 
     def test_the_checklist_is_accepted_after_three_refusals(self) -> None:
-        partial = support.PARTIAL_CHECKLIST
-        fake = support.scripted(self.root, [partial, partial, partial, READ_ALL])
-        result = self.run_agent(root=self.root, client=fake.client, turns=4)
+        fake = support.scripted(self.root, [SAD_PARTIAL, SAD_PARTIAL, SAD_PARTIAL, READ_ALL])
+        with mock.patch(
+            "verification.verify_checklist.run_verification",
+            return_value=dict(CHECKLIST_FAIL, score=0.5),
+        ):
+            result = self.run_agent(root=self.root, client=fake.client, turns=4)
         case = support.case(self.root, result["run_id"])
         self.assertEqual(5, len(case["checklist"]))
         last = case["checklist_checks"][-1]
@@ -606,20 +669,22 @@ class VerifiedRunTest(unittest.TestCase):
 
     def test_early_declaration_is_refused_and_missing_evidence_escalates(self) -> None:
         fake = support.scripted(self.root, self.initial())
-        result = self.run_agent(root=self.root, client=fake.client, turns=20)
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
         self.assertEqual("needs_input", result["status"])
         refused = self.tool_results(result["run_id"], "submit_declaration")[0]
         self.assertEqual("declaration", refused["check"])
         case = support.case(self.root, result["run_id"])
         self.assertEqual(
-            ("timing", "missing_evidence"),
+            ("transport", "missing_evidence"),
             (case["requests"][0]["item"], case["requests"][0]["rule"]),
         )
         self.assertIsNone(case["declaration"])
 
     def test_escalating_before_reading_everything_is_refused(self) -> None:
-        fake = support.scripted(self.root, [support.CHECKLIST, ASK])
-        result = self.run_agent(root=self.root, client=fake.client, turns=2)
+        fake = support.scripted(self.root, [SAD_CHECKLIST, ASK])
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=2)
         self.assertIn(
             "read every visible document",
             self.tool_results(result["run_id"], "request_evidence")[0]["error"],
@@ -627,7 +692,8 @@ class VerifiedRunTest(unittest.TestCase):
 
     def test_resume_without_new_evidence_makes_no_model_call(self) -> None:
         fake = support.scripted(self.root, self.initial())
-        result = self.run_agent(root=self.root, client=fake.client, turns=20)
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
         before = len(fake.calls)
         resumed = self.resume_run(
             root=self.root, run_id=result["run_id"], client=fake.client, turns=5

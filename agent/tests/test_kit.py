@@ -369,28 +369,10 @@ class KitTest(unittest.TestCase):
             True,
         )
 
-    def test_verify_claims_reports_unsupported_findings(self) -> None:
+    def test_verify_claims_reports_unsupported_fields(self) -> None:
         from verification import verify_claims
 
-        # verify_claims still reads conclusion/findings/gaps until verification/ is updated.
-        declaration = {
-            "conclusion": "Probably yes.",
-            "findings": [
-                {
-                    "item": "ready_statement",
-                    "status": "proven",
-                    "summary": "Said ready.",
-                    "citations": [
-                        {
-                            "document_id": "DOC-MINUTES",
-                            "page": 1,
-                            "quote": "Mr. Lindgren confirmed the system is ready for go-live",
-                        }
-                    ],
-                }
-            ],
-            "gaps": "Timing unknown.",
-        }
+        declaration = support.cited_declaration()
         self.assertEqual(
             {"passed": True, "feedback": []},
             verify_claims.run_verification(self.ctx(), declaration),
@@ -399,7 +381,7 @@ class KitTest(unittest.TestCase):
             self.root,
             [],
             unsupported=lambda text: [
-                {"item": "ready_statement", "reason": "off topic"}
+                {"field": "importer.tin", "reason": "off topic"}
             ],
         )
         ctx = tools.Context(
@@ -411,7 +393,8 @@ class KitTest(unittest.TestCase):
         )
         result = verify_claims.run_verification(ctx, declaration)
         self.assertFalse(result["passed"])
-        self.assertIn("ready_statement", result["feedback"][0])
+        self.assertIn("importer.tin", result["feedback"][0])
+        self.assertIn("quotes do not support it", result["feedback"][0])
 
     def test_verify_evidence_request(self) -> None:
         from verification import verify_evidence_request
