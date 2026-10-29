@@ -39,7 +39,12 @@ def reference_path(root: Path) -> Path:
 def load_reference(root: Path) -> list | None:
     """The case's ground-truth items, or None if the case has none."""
     path = reference_path(root)
-    return json.loads(path.read_text())["items"] if path.is_file() else None
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text())
+    if isinstance(data.get("checklist"), list):
+        return data["checklist"]
+    return data.get("items")
 
 
 # ---- the checklist check ---------------------------------------------------------------
@@ -57,10 +62,23 @@ For each ground-truth item, decide whether some agent item covers the same quest
 Answer only with JSON: {{"covered": {{"<ground-truth id>": true}}, "feedback": "<feedback, empty when everything is covered>"}}"""
 
 
+def _reference_items(reference: list) -> list:
+    """Ground truth as [{"id", "question"}], across both file shapes."""
+    return [
+        {
+            "id": str(ref.get("id") or ref.get("item") or ""),
+            "question": str(ref.get("question", "")),
+        }
+        for ref in reference
+        if isinstance(ref, dict)
+    ]
+
+
 def run_verification(ctx, items: list) -> dict:
     reference = load_reference(ctx.root)
     if not reference:
         return {"passed": True, "score": None, "feedback": ""}
+    reference = _reference_items(reference)
     agent = [
         {"id": str(i.get("id", "")), "question": str(i.get("question", ""))}
         for i in items
