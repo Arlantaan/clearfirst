@@ -1,4 +1,5 @@
-"""flag_excluded (verification on): flag a confidential lawyer-client document.
+"""flag_excluded (verification on): flag a document that must not be used as evidence
+(for example a draft, a superseded version, or a document from a different shipment).
 
 It is excluded: its facts are withdrawn, it cannot be read again or cited, and the
 broker reviews the flags at declaration sign-off.
@@ -14,8 +15,9 @@ if TYPE_CHECKING:
 DEFINITION = {
     "type": "function",
     "name": "flag_excluded",
-    "description": "Flag a confidential lawyer-client document (Confidential Doc/Info). It is excluded and can "
-    "never be cited. The broker reviews flags at declaration sign-off.",
+    "description": "Flag a document that must not be used as evidence (for example "
+    "a draft, a superseded version, or a document from a different shipment). It is "
+    "excluded and can never be cited. The broker reviews flags at declaration sign-off.",
     "parameters": {
         "type": "object",
         "additionalProperties": False,
