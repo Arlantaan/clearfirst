@@ -19,7 +19,7 @@ Rules:
    in recorded facts from at least two documents, unless named in
    discrepancies/open_questions.
 5. Nothing excluded is cited; a proven signature item has a consistent signature
-   check on a cited document.
+   check on a document backing one of its recorded facts.
 6. Header values are sane (positive totals, HS shape, 2-letter codes, net <= gross,
    item values sum to the invoice total within 0.5%).
 """
@@ -132,21 +132,19 @@ def run_verification(ctx, declaration: dict) -> dict:
                     f"{label} cites a fact from unrelated item {fact['item']}."
                 )
 
-    # Rule 5 (signatures): a proven signature item has a consistent check on a cited doc.
-    cited_docs = {
-        str(c.get("document_id"))
-        for _, _, c in cites
-        if isinstance(c, dict) and c.get("document_id")
-    }
+    # Rule 5 (signatures): a proven signature item has a consistent check on a
+    # document backing one of its recorded facts.
     for item_id, entry in case.data["checklist"].items():
         if not entry.get("needs_signature_check") or entry.get("status") != "proven":
             continue
-        docs = {f["document_id"] for f in facts if f["item"] == item_id} & cited_docs
+        docs = {f["document_id"] for f in facts if f["item"] == item_id}
         checks = [
             c for c in case.data["signature_checks"] if c.get("document_id") in docs
         ]
         if not checks:
-            problems.append(f"{item_id} is proven but no cited document was checked.")
+            problems.append(
+                f"{item_id} is proven but no document backing its facts was checked."
+            )
         for check in checks:
             if check.get("verdict") != "consistent":
                 problems.append(

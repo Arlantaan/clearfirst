@@ -92,6 +92,7 @@ def save_progress(
     plain = [_plain(m) for m in messages]
     entry: dict[str, Any] = {"time": now(), "status": status, "end": len(plain)}
     if response is not None:
+        progress["notes"].pop("error", None)  # a good turn clears a recorded failure
         output = [_plain(item) for item in response.output]
         before = progress["turns"][-1]["end"] if progress["turns"] else 0
         start = next(
@@ -270,7 +271,10 @@ def _line(root: Path, progress: dict, entry: dict) -> str:
     """The terminal line for one saved turn."""
     run_id, status = progress["run_id"], entry["status"]
     if "turn" not in entry:
-        return f"Run {run_id}: {status}"
+        line = f"Run {run_id}: {status}"
+        if status == "paused" and progress.get("notes", {}).get("error"):
+            line += f" · model call failed: {progress['notes']['error']}"
+        return line
     messages = progress["messages"]
     call = next(
         (

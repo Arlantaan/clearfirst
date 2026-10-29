@@ -128,6 +128,17 @@ class AgentLoopTest(unittest.TestCase):
         )
         self.assertIn("more turns", str(support.agent_requests(fake)[2]["input"]))
 
+    def test_resume_adds_turns_beyond_the_saved_turn_count(self) -> None:
+        fake = support.scripted(self.root, [LIST] * 42)
+        result = run_agent(root=self.root, client=fake.client, turns=27)
+        self.assertEqual(("paused", 27), (result["status"], result["turn"]))
+        resumed = resume_run(
+            root=self.root, run_id=result["run_id"], client=fake.client, turns=15
+        )
+        self.assertEqual(("paused", 42), (resumed["status"], resumed["turn"]))
+        self.assertEqual(42, len(support.agent_requests(fake)))
+        self.assertIn("last turn", str(support.agent_requests(fake)[-1]["input"]))
+
     def test_an_answered_run_has_nothing_to_resume(self) -> None:
         fake = support.scripted(self.root, [DECLARATION])
         result = run_agent(root=self.root, client=fake.client, turns=5)
@@ -168,6 +179,72 @@ class AgentLoopTest(unittest.TestCase):
             root=self.root, run_id=result["run_id"], client=fake.client, turns=5
         )
         self.assertEqual("answered", resumed["status"])
+
+    def test_expired_reasoning_400_retries_once_without_reasoning(self) -> None:
+        fake = support.scripted(self.root, [LIST, DECLARATION])
+        original = fake.responder
+        seen = []
+
+        def reasoning_then_expired(kind, payload):
+            if kind == "respond" and "tools" in payload:
+                seen.append(payload)
+                if len(seen) == 1:
+                    answer = original(kind, payload)
+                    return {
+                        **answer,
+                        "output": [
+                            {"type": "reasoning", "id": "rs_old", "summary": []},
+                            *answer["output"],
+                        ],
+                    }
+                if len(seen) == 2:
+                    raise Refused(
+                        "Referenced reasoning item 'rs_old' was not found or has expired."
+                    )
+            return original(kind, payload)
+
+        fake.responder = reasoning_then_expired
+        result = run_agent(root=self.root, client=fake.client, turns=5)
+        self.assertEqual("answered", result["status"])
+        self.assertEqual(3, len(seen))
+        self.assertTrue(any(i.get("type") == "reasoning" for i in seen[1]["input"]))
+        retry_input = seen[2]["input"]
+        self.assertFalse(any(i.get("type") == "reasoning" for i in retry_input))
+        self.assertTrue(any(i.get("type") == "function_call" for i in retry_input))
+        self.assertTrue(
+            any(i.get("type") == "function_call_output" for i in retry_input)
+        )
+
+    def test_resume_drops_saved_reasoning_items(self) -> None:
+        fake = support.scripted(self.root, [LIST, LIST])
+        original = fake.responder
+
+        def with_reasoning(kind, payload):
+            answer = original(kind, payload)
+            if kind == "respond" and "tools" in payload and answer.get("output"):
+                return {
+                    **answer,
+                    "output": [{"type": "reasoning", "id": "rs_old", "summary": []}]
+                    + answer["output"],
+                }
+            return answer
+
+        fake.responder = with_reasoning
+        result = run_agent(root=self.root, client=fake.client, turns=1)
+        self.assertEqual("paused", result["status"])
+        saved = support.progress(self.root, result["run_id"])["messages"]
+        self.assertTrue(any(m.get("type") == "reasoning" for m in saved))
+        resumed = resume_run(
+            root=self.root, run_id=result["run_id"], client=fake.client, turns=2
+        )
+        self.assertEqual(3, resumed["turn"])
+        live = [p for k, p in fake.calls if k == "respond" and "tools" in p]
+        first_resume = live[1]["input"]
+        self.assertFalse(any(m.get("type") == "reasoning" for m in first_resume))
+        self.assertTrue(any(m.get("type") == "function_call" for m in first_resume))
+        self.assertTrue(
+            any(m.get("type") == "function_call_output" for m in first_resume)
+        )
 
 
 if __name__ == "__main__":

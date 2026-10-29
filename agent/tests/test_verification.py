@@ -448,10 +448,10 @@ class DeclarationRulesTest(unittest.TestCase):
         }
         return declaration
 
-    def test_signature_items_need_a_check_on_a_cited_document(self) -> None:
+    def test_signature_items_need_a_check_on_a_fact_backing_document(self) -> None:
         declaration = self.signature_declaration()
         self.assertIn(
-            "signatures is proven but no cited document was checked.",
+            "signatures is proven but no document backing its facts was checked.",
             self.problems(declaration),
         )
         self.case.add_signature_check(
@@ -463,7 +463,7 @@ class DeclarationRulesTest(unittest.TestCase):
             }
         )
         self.assertIn(
-            "signatures is proven but no cited document was checked.",
+            "signatures is proven but no document backing its facts was checked.",
             self.problems(declaration),
         )
         self.case.add_signature_check(
@@ -478,6 +478,23 @@ class DeclarationRulesTest(unittest.TestCase):
         self.assertFalse(
             [p for p in found if "was checked" in p or "is not proven" in p]
         )
+
+    def test_signature_check_counts_without_being_cited(self) -> None:
+        support.release(self.root)
+        self.read(["DOC-CERT"])
+        self.fact("signatures", "DOC-CERT", self.CERTIFY)
+        self.case.add_signature_check(
+            {
+                "document_id": "DOC-CERT",
+                "page": 1,
+                "signer": "Dana Okafor",
+                "verdict": "consistent",
+            }
+        )
+        declaration = self.bare()
+        declaration["open_questions"].append("exporter.name")
+        found = self.problems(declaration)
+        self.assertFalse([p for p in found if "signatures" in p])
 
     def test_a_proven_item_cannot_rest_on_an_inconsistent_signature(self) -> None:
         declaration = self.signature_declaration()
