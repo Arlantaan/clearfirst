@@ -16,7 +16,7 @@ from agent_kit.settings import case_dir, model
 
 def run_agent(*, root: Path, client: OpenAI, turns: int = 30) -> dict:
     root = Path(root)
-    instructions = (root / "customs_agent/system_instructions.md").read_text()
+    instructions = (Path(__file__).resolve().parent / "system_instructions.md").read_text()
     objective = (case_dir(root) / "objective.md").read_text()
     run_id = progress.new_run(root, instructions=instructions, objective=objective)
     messages: list = [{"role": "user", "content": objective}]
@@ -34,7 +34,7 @@ def resume_run(*, root: Path, run_id: str, client: OpenAI, turns: int = 15) -> d
             "turn": saved["turn"],
             "note": step.get("note", ""),
         }
-    instructions = (root / "customs_agent/system_instructions.md").read_text()
+    instructions = (Path(__file__).resolve().parent / "system_instructions.md").read_text()
     messages: list = list(saved["messages"]) + [
         {"role": "user", "content": step["message"]}
     ]

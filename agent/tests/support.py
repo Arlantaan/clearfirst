@@ -8,6 +8,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from agent_kit.case_record import HEADER_FIELDS, ITEM_FIELDS
 from agent_kit.tools import check_signatures
 from tests.fake_model import Scripted, ScriptedModel
 
@@ -111,25 +112,71 @@ FACT = (
         "claim": "the vendor said it was ready",
     },
 )
+CITE = {
+    "document_id": "DOC-MINUTES",
+    "page": 1,
+    "quote": "Mr. Lindgren confirmed the system is ready for go-live",
+}
+
+
+def _header_values() -> dict:
+    return {
+        "declaration_type": "SAD",
+        "procedure_code": "IM4",
+        "importer": {"name": "Nordic Retail AB", "tin": "SE5566778899"},
+        "exporter": {"name": "Meridian Export Ltd", "country": "DE"},
+        "transport": {
+            "vessel": "MV Meridian",
+            "bl_number": "BL123456",
+            "container": "MSKU1234567",
+            "port_of_loading": "Hamburg",
+            "port_of_discharge": "Gothenburg",
+        },
+        "valuation": {"incoterm": "CIF", "currency": "USD", "invoice_total": 10000},
+    }
+
+
+def _item_values() -> dict:
+    return {
+        "line": 1,
+        "description": "Cotton shirts",
+        "hs_code": "6109.10",
+        "hs_justification": "Knitted cotton T-shirts.",
+        "origin": "DE",
+        "packages": 10,
+        "package_kind": "cartons",
+        "gross_kg": 250.0,
+        "net_kg": 230.0,
+        "supplementary_qty": 500,
+        "supplementary_unit": "pieces",
+        "item_value": 10000,
+    }
+
+
+def cited_declaration() -> dict:
+    """New-shape declaration args with every field cited (needs DOC-MINUTES analyzed)."""
+    header = _header_values()
+    header["citations"] = {path: [dict(CITE)] for path in HEADER_FIELDS}
+    item = _item_values()
+    item["citations"] = [dict(CITE)]
+    return {
+        "header": header,
+        "items": [item],
+        "discrepancies": [],
+        "open_questions": [],
+    }
+
+
+# For the agent-loop tests: valid with no documents analyzed (no citations, every
+# field named in open_questions). Citation coverage lives in test_kit.py.
 DECLARATION = (
     "submit_declaration",
     {
-        "conclusion": "Probably yes.",
-        "findings": [
-            {
-                "item": "ready_statement",
-                "status": "proven",
-                "summary": "Said ready.",
-                "citations": [
-                    {
-                        "document_id": "DOC-MINUTES",
-                        "page": 1,
-                        "quote": "Mr. Lindgren confirmed the system is ready for go-live",
-                    }
-                ],
-            }
-        ],
-        "gaps": "Timing unknown.",
+        "header": _header_values(),
+        "items": [_item_values()],
+        "discrepancies": [],
+        "open_questions": list(HEADER_FIELDS)
+        + [f"items[0].{field}" for field in ITEM_FIELDS],
     },
 )
 

@@ -129,8 +129,8 @@ class KitTest(unittest.TestCase):
         self.assertEqual("proven", case.data["checklist"]["not_ready"]["status"])
         self.assertIn("timing", fact["progress"]["summary"])
 
-    def test_limits_three_facts_per_item_and_three_citations_per_finding(self) -> None:
-        self.read(["DOC-REPORT"])
+    def test_limits_three_facts_per_item_and_three_citations(self) -> None:
+        self.read(["DOC-REPORT", "DOC-MINUTES"])
         case = self.case()
         for _ in range(case_record.MAX_FACTS_PER_ITEM):
             case.record_fact(
@@ -140,21 +140,10 @@ class KitTest(unittest.TestCase):
             case.record_fact(
                 "not_ready", "DOC-REPORT", 1, "Overall status is green", "x"
             )
-        citation = {
-            "document_id": "DOC-REPORT",
-            "page": 1,
-            "quote": "Overall status is green",
-        }
-        finding = {
-            "item": "not_ready",
-            "status": "proven",
-            "summary": "x",
-            "citations": [citation] * 4,
-        }
-        with self.assertRaisesRegex(CaseError, "cites 4 facts"):
-            case.file_declaration(
-                {"conclusion": "c", "findings": [finding], "gaps": ""}, "unverified"
-            )
+        args = support.cited_declaration()
+        args["items"][0]["citations"] = [dict(support.CITE)] * 4
+        with self.assertRaisesRegex(CaseError, "cites 4 quotes"):
+            case.file_declaration(args, "unverified")
 
     def test_flagged_document_withdraws_and_blocks_facts(self) -> None:
         self.read(["DOC-DECLARATION"])
@@ -250,6 +239,66 @@ class KitTest(unittest.TestCase):
             "unverified", CaseRecord(self.root, self.run_id).data["declaration"]["status"]
         )
 
+    def test_cited_declaration_files_when_every_field_is_covered(self) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        record = case.file_declaration(support.cited_declaration(), "unverified")
+        self.assertEqual("unverified", record["status"])
+        args = support.cited_declaration()
+        del args["header"]["citations"]["transport.bl_number"]
+        args["discrepancies"] = [
+            {
+                "field": "transport.bl_number",
+                "documents": ["DOC-REPORT", "DOC-MINUTES"],
+                "detail": "B/L numbers differ.",
+            }
+        ]
+        record = case.file_declaration(args, "unverified")
+        self.assertEqual("unverified", record["status"])
+
+    def test_declaration_refuses_missing_fields_bad_quotes_and_excluded_docs(
+        self,
+    ) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        with self.assertRaisesRegex(CaseError, "importer\\.tin"):
+            case.file_declaration(
+                {
+                    "header": {},
+                    "items": [],
+                    "discrepancies": [],
+                    "open_questions": [],
+                },
+                "unverified",
+            )
+        with self.assertRaisesRegex(CaseError, r"items\[0\]\.gross_kg"):
+            case.file_declaration(
+                {
+                    "header": {},
+                    "items": [{}],
+                    "discrepancies": [],
+                    "open_questions": list(case_record.HEADER_FIELDS),
+                },
+                "unverified",
+            )
+        args = support.cited_declaration()
+        args["header"]["citations"]["importer.tin"][0]["quote"] = (
+            "The vendor admitted it was broken"
+        )
+        with self.assertRaisesRegex(CaseError, "quote not found"):
+            case.file_declaration(args, "unverified")
+        args = support.cited_declaration()
+        args["items"][0]["citations"] = [
+            {
+                "document_id": "DOC-DECLARATION",
+                "page": 1,
+                "quote": "Broker work product for the review team",
+            }
+        ]
+        case.flag_excluded("DOC-DECLARATION", "broker work product")
+        with self.assertRaisesRegex(CaseError, "confidential"):
+            case.file_declaration(args, "unverified")
+
     def test_documents_read_are_remembered(self) -> None:
         self.tool("analyze_document", {"document_ids": ["DOC-REPORT"], "request": "x"})
         self.assertEqual(
@@ -297,7 +346,25 @@ class KitTest(unittest.TestCase):
     def test_verify_claims_reports_unsupported_findings(self) -> None:
         from verification import verify_claims
 
-        declaration = support.DECLARATION[1]
+        # verify_claims still reads conclusion/findings/gaps until verification/ is updated.
+        declaration = {
+            "conclusion": "Probably yes.",
+            "findings": [
+                {
+                    "item": "ready_statement",
+                    "status": "proven",
+                    "summary": "Said ready.",
+                    "citations": [
+                        {
+                            "document_id": "DOC-MINUTES",
+                            "page": 1,
+                            "quote": "Mr. Lindgren confirmed the system is ready for go-live",
+                        }
+                    ],
+                }
+            ],
+            "gaps": "Timing unknown.",
+        }
         self.assertEqual(
             {"passed": True, "feedback": []},
             verify_claims.run_verification(self.ctx(), declaration),

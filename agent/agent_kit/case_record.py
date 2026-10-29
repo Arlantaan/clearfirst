@@ -20,7 +20,39 @@ ITEM_STATUSES = ("open", "proven", "escalated")
 
 
 MAX_FACTS_PER_ITEM = 3
-MAX_CITATIONS_PER_FINDING = 3
+MAX_CITATIONS = 3  # per header field or item
+
+HEADER_FIELDS = (
+    "declaration_type",
+    "procedure_code",
+    "importer.name",
+    "importer.tin",
+    "exporter.name",
+    "exporter.country",
+    "transport.vessel",
+    "transport.bl_number",
+    "transport.container",
+    "transport.port_of_loading",
+    "transport.port_of_discharge",
+    "valuation.incoterm",
+    "valuation.currency",
+    "valuation.invoice_total",
+)
+
+ITEM_FIELDS = (
+    "line",
+    "description",
+    "hs_code",
+    "hs_justification",
+    "origin",
+    "packages",
+    "package_kind",
+    "gross_kg",
+    "net_kg",
+    "supplementary_qty",
+    "supplementary_unit",
+    "item_value",
+)
 
 
 class CaseError(ValueError):
@@ -378,21 +410,107 @@ class CaseRecord:
         return [r for r in self.data["requests"] if r["status"] == "open"]
 
     def file_declaration(self, declaration: dict, status: str) -> dict:
-        """File the declaration. Refused if a finding cites more than MAX_CITATIONS_PER_FINDING facts."""
-        for finding in declaration.get("findings") or []:
-            citations = finding.get("citations") if isinstance(finding, dict) else None
-            if (
-                isinstance(citations, list)
-                and len(citations) > MAX_CITATIONS_PER_FINDING
-            ):
-                raise CaseError(
-                    f"the finding for {finding.get('item')} cites {len(citations)} facts; "
-                    f"cite its {MAX_CITATIONS_PER_FINDING} strongest at most"
+        """File the SAD declaration (header, items, discrepancies, open_questions).
+
+        Refused unless every header field and every item field is cited (1-3 quotes
+        copied exactly from an analyzed page) or named in discrepancies/open_questions.
+        """
+        header = declaration.get("header") if isinstance(declaration, dict) else None
+        items = declaration.get("items") if isinstance(declaration, dict) else None
+        discrepancies = (
+            declaration.get("discrepancies") if isinstance(declaration, dict) else None
+        )
+        open_questions = (
+            declaration.get("open_questions") if isinstance(declaration, dict) else None
+        )
+        if not isinstance(header, dict):
+            raise CaseError("the declaration needs a header object")
+        if not isinstance(items, list):
+            raise CaseError("the declaration needs an items list")
+        if not isinstance(discrepancies, list):
+            raise CaseError("the declaration needs a discrepancies list")
+        if not isinstance(open_questions, list):
+            raise CaseError("the declaration needs an open_questions list")
+        named_fields = {
+            str(d.get("field", "")).strip()
+            for d in discrepancies
+            if isinstance(d, dict) and str(d.get("field", "")).strip()
+        }
+        questions = [str(q) for q in open_questions]
+
+        def named(path: str) -> bool:
+            return path in named_fields or any(path in q for q in questions)
+
+        citations = header.get("citations") or {}
+        if not isinstance(citations, dict):
+            raise CaseError("header citations must be an object keyed by field path")
+        missing = []
+        for path in HEADER_FIELDS:
+            cites = citations.get(path) or []
+            if cites:
+                self._check_citations(cites, f"header {path}")
+            elif not named(path):
+                missing.append(path)
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise CaseError(f"items[{index}] must be an object")
+            cites = item.get("citations") or []
+            if cites:
+                self._check_citations(cites, f"items[{index}]")
+            else:
+                missing.extend(
+                    f"items[{index}].{field}"
+                    for field in ITEM_FIELDS
+                    if not named(f"items[{index}].{field}")
                 )
+        if missing:
+            raise CaseError(
+                "missing citations for: "
+                + ", ".join(missing)
+                + "; cite each field or name it in discrepancies or open_questions"
+            )
         record = dict(declaration, status=status, filed=now(), review=None)
         self.data["declaration"] = record
         self._save("declaration_filed", "agent", {"status": status})
         return record
+
+    def _check_citations(self, cites: list, where: str) -> None:
+        """One citation list: 1-3 quotes, each exactly on its page of an analyzed document."""
+        if not isinstance(cites, list) or not cites:
+            raise CaseError(f"{where} needs 1-3 citations")
+        if len(cites) > MAX_CITATIONS:
+            raise CaseError(
+                f"{where} cites {len(cites)} quotes; "
+                f"cite its {MAX_CITATIONS} strongest at most"
+            )
+        for cite in cites:
+            if not isinstance(cite, dict):
+                raise CaseError(f"{where} has a citation that is not an object")
+            document_id = str(cite.get("document_id", ""))
+            quote = str(cite.get("quote", ""))
+            try:
+                page = int(cite.get("page"))
+            except (TypeError, ValueError):
+                raise CaseError(
+                    f"{where} cites {document_id or 'a document'} with no page number"
+                ) from None
+            if self.flagged(document_id):
+                raise CaseError(
+                    f"{document_id} is flagged as confidential and can never be cited"
+                )
+            try:
+                document_text.get_document(self.root, document_id)
+            except document_text.DocumentError as error:
+                raise CaseError(str(error)) from None
+            text = document_text.page_text(self.root, document_id, page)
+            if text is None:
+                raise CaseError(
+                    f"{document_id} has not been analyzed yet; call analyze_document first"
+                )
+            if not document_text.quote_on_page(quote, text):
+                raise CaseError(
+                    f"quote not found on {document_id} page {page}; copy the exact words from the document"
+                )
 
     # ---- people ----
     def answer_request(self, request_id: str, response: str) -> dict:
