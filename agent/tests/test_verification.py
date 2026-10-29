@@ -221,6 +221,19 @@ class ChecklistCheckTest(unittest.TestCase):
 class DeclarationRulesTest(unittest.TestCase):
     """verification/verify_declaration.py: the declaration rules."""
 
+    OKA_REF = "signed by Dana Okafor"  # DOC-REF p1
+    OKA_CERT = "D. Okafor"  # DOC-CERT p1
+    PARTNER = "Erik Lindgren, Engagement Partner"  # DOC-MINUTES p1
+    READY = "Mr. Lindgren confirmed the system is ready for go-live"  # DOC-MINUTES p1
+    PHASE2 = "UAT Phase 2 exit certification"  # DOC-CERT p1
+    CERTIFY = "I certify that all exit criteria have been satisfied"  # DOC-CERT p1
+    GREEN = "Overall status is green"  # DOC-REPORT p1
+    DEFECTS = "Open Severity 1 defects: 21"  # DOC-REPORT p1
+    WEEKLY = "Weekly status report"  # DOC-REPORT p1
+    DATED = "dated December 19"  # DOC-DRAFT p1
+    NOGO = "Recommendation: NO-GO"  # DOC-DRAFT p1
+    WORK = "Broker work product for the review team"  # DOC-DECLARATION p1
+
     def setUp(self) -> None:
         from verification import verify_declaration
 
@@ -229,8 +242,74 @@ class DeclarationRulesTest(unittest.TestCase):
         self.fake = support.scripted(self.root, [])
         self.ctx = context(self.root, self.fake.client)
         self.case = self.ctx.case
-        self.case.set_checklist(support.CHECKLIST_ITEMS)
+        self.case.set_checklist(
+            [
+                self.checklist_item(
+                    "importer", "Who is the importer and what is their TIN?"
+                ),
+                self.checklist_item(
+                    "exporter_origin",
+                    "Who is the exporter and what is the country of origin?",
+                ),
+                self.checklist_item(
+                    "goods_hs",
+                    "What are the goods and what is their HS classification?",
+                ),
+                self.checklist_item(
+                    "packages_weights",
+                    "How many packages of what kind, and what are the gross "
+                    "and net weights?",
+                ),
+                self.checklist_item(
+                    "quantity", "What is the supplementary quantity and unit?"
+                ),
+                self.checklist_item(
+                    "valuation",
+                    "What is the invoice total, currency, incoterm and customs value?",
+                ),
+                self.checklist_item(
+                    "transport",
+                    "What are the transport details: vessel, B/L number, "
+                    "container and ports?",
+                ),
+                self.checklist_item(
+                    "consistency",
+                    "Do weights, package counts, references and parties agree "
+                    "across documents?",
+                ),
+                self.checklist_item(
+                    "signatures",
+                    "Is the certificate signed by the named person?",
+                    signature=True,
+                ),
+            ]
+        )
         self.verify = verify_declaration.run_verification
+
+    @staticmethod
+    def checklist_item(item_id, question, signature=False):
+        return {
+            "id": item_id,
+            "question": question,
+            "evidence_needed": f"A document showing {item_id}",
+            "needs_signature_check": signature,
+        }
+
+    @staticmethod
+    def citation(document_id, quote):
+        return {"document_id": document_id, "page": 1, "quote": quote}
+
+    def fact(self, item, document_id, quote):
+        return self.case.record_fact(item, document_id, 1, quote, "c")
+
+    def bare(self):
+        """Minimal valid-shape declaration; rule-4 header targets named."""
+        return {
+            "header": support.header_values(),
+            "items": [],
+            "discrepancies": [],
+            "open_questions": ["valuation.invoice_total", "importer.name"],
+        }
 
     def problems(self, declaration: dict) -> list:
         result = self.verify(self.ctx, declaration)
@@ -242,23 +321,86 @@ class DeclarationRulesTest(unittest.TestCase):
 
         analyze(self.fake.client, self.root, ids, "x")
 
-    def test_unsettled_items_and_unmatched_citations_are_problems(self) -> None:
-        found = self.problems(EARLY_DECLARATION[1])
-        self.assertTrue(any("neither proven nor escalated" in p for p in found))
-        self.assertTrue(any("no matching recorded fact" in p for p in found))
-        self.assertTrue(any("no finding for not_ready" in p for p in found))
+    def test_open_items_and_open_requests_are_problems(self) -> None:
+        self.case.open_request(
+            "importer", "the commercial invoice", "missing_evidence", ALL_INITIAL
+        )
+        found = self.problems(self.bare())
+        self.assertTrue(
+            any("valuation is neither proven nor escalated" in p for p in found)
+        )
+        self.assertTrue(
+            any("evidence request R1 for importer is still open" in p for p in found)
+        )
 
-    def signature_finding(self) -> dict:
+    def test_unmatched_citations_are_problems(self) -> None:
+        declaration = self.bare()
+        declaration["header"]["citations"] = {
+            "importer.tin": [self.citation("DOC-MINUTES", self.READY)]
+        }
+        found = self.problems(declaration)
+        self.assertIn(
+            "header importer.tin cites a quote with no matching recorded fact.", found
+        )
+
+    def test_citations_from_unrelated_items_are_problems(self) -> None:
+        self.read(["DOC-MINUTES"])
+        self.fact("consistency", "DOC-MINUTES", self.READY)
+        declaration = self.bare()
+        declaration["header"]["citations"] = {
+            "importer.tin": [self.citation("DOC-MINUTES", self.READY)]
+        }
+        found = self.problems(declaration)
+        self.assertIn(
+            "header importer.tin cites a fact from unrelated item consistency.", found
+        )
+
+    def test_single_source_values_are_problems_unless_named(self) -> None:
+        self.read(["DOC-REPORT"])
+        self.fact("packages_weights", "DOC-REPORT", self.DEFECTS)
+        item = support.cited_declaration()["items"][0]
+        item["gross_kg"] = 21
+        item["net_kg"] = 20
+        item["citations"] = [self.citation("DOC-REPORT", self.DEFECTS)]
+        named = [
+            "valuation.invoice_total",
+            "importer.name",
+            "items[0].net_kg",
+            "items[0].packages",
+            "items[0].hs_code",
+        ]
+        declaration = {
+            "header": support.header_values(),
+            "items": [item],
+            "discrepancies": [],
+            "open_questions": list(named),
+        }
+        self.assertIn(
+            "items[0].gross_kg is supported by only one document.",
+            self.problems(declaration),
+        )
+        declaration["open_questions"].append("items[0].gross_kg")
+        self.assertNotIn(
+            "items[0].gross_kg is supported by only one document.",
+            self.problems(declaration),
+        )
+
+    def signature_declaration(self) -> dict:
         support.release(self.root)
         self.read(["DOC-CERT"])
-        quote = "I certify that all exit criteria have been satisfied"
-        self.case.record_fact("signatures", "DOC-CERT", 1, quote, "c")
-        return {"findings": [cite("signatures", "DOC-CERT", quote)]}
+        self.fact("transport", "DOC-CERT", self.PHASE2)
+        self.fact("signatures", "DOC-CERT", self.CERTIFY)
+        declaration = self.bare()
+        declaration["header"]["citations"] = {
+            "transport.vessel": [self.citation("DOC-CERT", self.PHASE2)]
+        }
+        return declaration
 
-    def test_signature_items_need_a_signature_check_on_a_cited_document(self) -> None:
-        declaration = self.signature_finding()
-        self.assertTrue(
-            any("no cited document was checked" in p for p in self.problems(declaration))
+    def test_signature_items_need_a_check_on_a_cited_document(self) -> None:
+        declaration = self.signature_declaration()
+        self.assertIn(
+            "signatures is proven but no cited document was checked.",
+            self.problems(declaration),
         )
         self.case.add_signature_check(
             {
@@ -268,12 +410,25 @@ class DeclarationRulesTest(unittest.TestCase):
                 "verdict": "consistent",
             }
         )
-        self.assertTrue(
-            any("no cited document was checked" in p for p in self.problems(declaration))
+        self.assertIn(
+            "signatures is proven but no cited document was checked.",
+            self.problems(declaration),
+        )
+        self.case.add_signature_check(
+            {
+                "document_id": "DOC-CERT",
+                "page": 1,
+                "signer": "Dana Okafor",
+                "verdict": "consistent",
+            }
+        )
+        found = self.problems(declaration)
+        self.assertFalse(
+            [p for p in found if "was checked" in p or "is not proven" in p]
         )
 
     def test_a_proven_item_cannot_rest_on_an_inconsistent_signature(self) -> None:
-        declaration = self.signature_finding()
+        declaration = self.signature_declaration()
         self.case.add_signature_check(
             {
                 "document_id": "DOC-CERT",
@@ -284,46 +439,71 @@ class DeclarationRulesTest(unittest.TestCase):
             }
         )
         found = self.problems(declaration)
-        self.assertTrue(
-            any("DOC-CERT p1 is inconsistent" in p and "not proven" in p for p in found)
+        self.assertIn(
+            "DOC-CERT p1 signature is inconsistent, so signatures is not proven.",
+            found,
         )
         self.assertEqual("signature", self.case.data["flags"][0]["kind"])
 
-    def test_confidential_documents_are_never_cited(self) -> None:
+    def test_excluded_documents_are_never_cited(self) -> None:
         self.read(["DOC-DECLARATION"])
+        self.fact("importer", "DOC-DECLARATION", self.WORK)
         self.case.flag_excluded("DOC-DECLARATION", "work product")
-        declaration = {
-            "findings": [
-                cite(
-                    "counterevidence",
-                    "DOC-DECLARATION",
-                    "Broker work product for the review team",
-                )
-            ]
+        declaration = self.bare()
+        declaration["header"]["citations"] = {
+            "importer.name": [self.citation("DOC-DECLARATION", self.WORK)]
         }
-        self.assertTrue(any("confidential" in p for p in self.problems(declaration)))
+        found = self.problems(declaration)
+        self.assertIn(
+            "header importer.name cites excluded document DOC-DECLARATION.", found
+        )
 
-    def test_an_open_request_is_a_problem(self) -> None:
-        self.case.open_request(
-            "timing", "the draft assessment", "missing_evidence", ALL_INITIAL
-        )
-        self.assertTrue(
-            any("request is still open" in p for p in self.problems({"findings": []}))
-        )
+    def test_header_sanity_flags_bad_values(self) -> None:
+        header = support.header_values()
+        header["valuation"]["invoice_total"] = 9000
+        header["exporter"]["country"] = "DEU"
+        item = support.cited_declaration()["items"][0]
+        item["hs_code"] = "12"
+        item["origin"] = "DEU"
+        item["net_kg"] = 300
+        item["citations"] = []
+        declaration = {
+            "header": header,
+            "items": [item],
+            "discrepancies": [],
+            "open_questions": [
+                "valuation.invoice_total",
+                "importer.name",
+                "items[0].gross_kg",
+                "items[0].net_kg",
+                "items[0].packages",
+                "items[0].hs_code",
+            ],
+        }
+        found = self.problems(declaration)
+        self.assertIn("exporter.country must be a 2-letter code.", found)
+        self.assertIn("items[0].hs_code '12' is not a valid HS code.", found)
+        self.assertIn("items[0].origin must be a 2-letter code.", found)
+        self.assertIn("items[0].net_kg exceeds gross_kg.", found)
+        self.assertTrue(any("item values sum to" in p for p in found))
+        header["valuation"]["invoice_total"] = -5
+        found = self.problems(declaration)
+        self.assertIn("valuation.invoice_total must be a positive number.", found)
 
     def test_a_good_declaration_has_no_problems(self) -> None:
         self.read(ALL_INITIAL)
         support.release(self.root)
         self.read(["DOC-DRAFT", "DOC-CERT"])
-        for _name, args in FACTS + [AFTER_RELEASE[1], AFTER_RELEASE[3]]:
-            fact: dict = dict(args)
-            self.case.record_fact(
-                fact["item"],
-                fact["document_id"],
-                fact["page"],
-                fact["quote"],
-                fact["claim"],
-            )
+        self.fact("importer", "DOC-REF", self.OKA_REF)
+        self.fact("importer", "DOC-CERT", self.OKA_CERT)
+        self.fact("exporter_origin", "DOC-MINUTES", self.PARTNER)
+        self.fact("goods_hs", "DOC-REPORT", self.WEEKLY)
+        self.fact("packages_weights", "DOC-REPORT", self.DEFECTS)
+        self.fact("quantity", "DOC-DRAFT", self.DATED)
+        self.fact("valuation", "DOC-REPORT", self.GREEN)
+        self.fact("transport", "DOC-CERT", self.PHASE2)
+        self.fact("consistency", "DOC-DRAFT", self.NOGO)
+        self.fact("signatures", "DOC-CERT", self.CERTIFY)
         self.case.add_signature_check(
             {
                 "document_id": "DOC-CERT",
@@ -332,7 +512,43 @@ class DeclarationRulesTest(unittest.TestCase):
                 "verdict": "consistent",
             }
         )
-        self.assertEqual([], self.problems(GOOD_DECLARATION[1]))
+        header = support.header_values()
+        header["importer"]["name"] = "Okafor"
+        green = self.citation("DOC-REPORT", self.GREEN)
+        phase2 = self.citation("DOC-CERT", self.PHASE2)
+        partner = self.citation("DOC-MINUTES", self.PARTNER)
+        header["citations"] = {
+            "importer.name": [
+                self.citation("DOC-REF", self.OKA_REF),
+                self.citation("DOC-CERT", self.OKA_CERT),
+            ],
+            "importer.tin": [self.citation("DOC-REF", self.OKA_REF)],
+            "exporter.name": [partner],
+            "exporter.country": [partner],
+            "transport.vessel": [phase2],
+            "transport.bl_number": [phase2],
+            "transport.container": [phase2],
+            "transport.port_of_loading": [phase2],
+            "transport.port_of_discharge": [phase2],
+            "valuation.incoterm": [green],
+            "valuation.currency": [green],
+            "valuation.invoice_total": [green],
+        }
+        item = support.cited_declaration()["items"][0]
+        item["citations"] = [self.citation("DOC-REPORT", self.WEEKLY)]
+        declaration = {
+            "header": header,
+            "items": [item],
+            "discrepancies": [],
+            "open_questions": [
+                "valuation.invoice_total",
+                "items[0].gross_kg",
+                "items[0].net_kg",
+                "items[0].packages",
+                "items[0].hs_code",
+            ],
+        }
+        self.assertEqual([], self.problems(declaration))
 
 
 @SKIP
