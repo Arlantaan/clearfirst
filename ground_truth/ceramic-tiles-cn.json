@@ -1,0 +1,113 @@
+{
+  "case": "ceramic-tiles-cn",
+  "declaration_type": "IM 4",
+  "procedure_code": "4000",
+  "customs_office": "GMBJL - Banjul Seaport",
+  "declarant_code": "DEC-0417",
+  "importer": {
+    "name": "Brikama Tile & Sanitary Centre",
+    "tin": "2019-GM-3302"
+  },
+  "exporter": {
+    "name": "Foshan Jinhui Ceramics Co., Ltd.",
+    "country": "CN"
+  },
+  "transport": {
+    "mode": "1 - Sea",
+    "vessel": "COSCO SHIPPING ARIES / 038W",
+    "bl_number": "COSU6419920077",
+    "container": "CSNU 602 118-7",
+    "port_of_loading": "Shenzhen, China",
+    "port_of_discharge": "Banjul, The Gambia",
+    "arrival_date": "2026-08-28"
+  },
+  "valuation": {
+    "incoterm": "CIF",
+    "delivery_place": "Banjul",
+    "currency": "USD",
+    "invoice_total": 17000.0,
+    "exchange_rate_gmd_per_usd": 71.83,
+    "customs_value_gmd": 1221110.0
+  },
+  "items": [
+    {
+      "line": 1,
+      "description": "Glazed ceramic floor tiles, 600 mm x 600 mm, porcelain body",
+      "hs_code": "6907.21.00",
+      "origin": "CN",
+      "packages": 860,
+      "package_kind": "PX - Pallet",
+      "gross_kg": 24800,
+      "net_kg": 24100,
+      "supplementary_qty": 18400,
+      "supplementary_unit": "m2",
+      "item_value_usd": 17000.0,
+      "statistical_value_gmd": 1221110.0
+    }
+  ],
+  "taxes": {
+    "import_duty_pct": 20.0,
+    "processing_fee_pct": 1.5,
+    "au_levy_pct": 0.2,
+    "ecowas_levy_pct": 0.5,
+    "gnsw_fee_pct": 1.0,
+    "vat_pct": 15.0
+  },
+  "expected_discrepancies": [
+    {
+      "field": "packages",
+      "documents": [
+        "BL-COSU6419920077",
+        "PL-FJC-2026-2210",
+        "INV-FJC-2026-2210"
+      ],
+      "detail": "B/L shows 806 packages; invoice and packing list show 860"
+    },
+    {
+      "field": "gross_kg",
+      "documents": [
+        "BL-COSU6419920077",
+        "PL-FJC-2026-2210",
+        "INV-FJC-2026-2210"
+      ],
+      "detail": "B/L shows 24,080 kg; invoice and packing list show 24,800 kg"
+    }
+  ],
+  "checklist": [
+    {
+      "item": "importer_identity",
+      "question": "Who is the importer and what is their TIN?",
+      "settled_by": "Invoice sold-to and B/L consignee agree"
+    },
+    {
+      "item": "exporter_and_origin",
+      "question": "Who is the exporter and what is the country of origin?",
+      "settled_by": "Invoice, certificate of origin"
+    },
+    {
+      "item": "goods_description_and_hs",
+      "question": "What are the goods and what HS code applies?",
+      "settled_by": "Invoice description; HS 6809.19 for plasterboard (gypsum articles, not faced only with paper)"
+    },
+    {
+      "item": "quantities",
+      "question": "How many packages, boards, and what gross and net weight?",
+      "settled_by": "Packing list; B/L gross weight must agree"
+    },
+    {
+      "item": "customs_value",
+      "question": "What is the invoice total, currency and incoterm, and the customs value in GMD?",
+      "settled_by": "Invoice total CIF Banjul x exchange rate"
+    },
+    {
+      "item": "transport_details",
+      "question": "Vessel, B/L number, container, ports?",
+      "settled_by": "Bill of lading"
+    },
+    {
+      "item": "cross_document_consistency",
+      "question": "Do weights, package counts, references and parties agree across all documents?",
+      "settled_by": "Comparison of invoice, packing list, B/L, CoO. Expected discrepancies: B/L package count (806 vs 860) and B/L gross weight (24,080 vs 24,800 kg) disagree with invoice and packing list"
+    }
+  ]
+}

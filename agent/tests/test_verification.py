@@ -704,11 +704,12 @@ class VerifiedRunTest(unittest.TestCase):
 
     def test_release_resume_verified_declaration_then_signoff(self) -> None:
         fake = support.scripted(self.root, self.initial() + AFTER_RELEASE + [GOOD_DECLARATION])
-        result = self.run_agent(root=self.root, client=fake.client, turns=20)
-        support.release(self.root)
-        resumed = self.resume_run(
-            root=self.root, run_id=result["run_id"], client=fake.client, turns=10
-        )
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
+            support.release(self.root)
+            resumed = self.resume_run(
+                root=self.root, run_id=result["run_id"], client=fake.client, turns=10
+            )
         self.assertEqual(
             (result["run_id"], "awaiting_signoff"),
             (resumed["run_id"], resumed["status"]),
@@ -736,17 +737,19 @@ class VerifiedRunTest(unittest.TestCase):
         fake = support.scripted(
             self.root, self.initial() + AFTER_RELEASE + [GOOD_DECLARATION, GOOD_DECLARATION]
         )
-        result = self.run_agent(root=self.root, client=fake.client, turns=20)
-        support.release(self.root)
-        self.resume_run(
-            root=self.root, run_id=result["run_id"], client=fake.client, turns=10
-        )
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
+            support.release(self.root)
+            self.resume_run(
+                root=self.root, run_id=result["run_id"], client=fake.client, turns=10
+            )
         CaseRecord(self.root, result["run_id"]).review_declaration(
-            False, "Explain the counterevidence more fully."
+            False, "Explain the valuation evidence more fully."
         )
-        again = self.resume_run(
-            root=self.root, run_id=result["run_id"], client=fake.client, turns=5
-        )
+        with self.passing_checklist():
+            again = self.resume_run(
+                root=self.root, run_id=result["run_id"], client=fake.client, turns=5
+            )
         self.assertEqual("awaiting_signoff", again["status"])
         self.assertIn("rejected", str(support.agent_requests(fake)[-1]["input"]))
 
@@ -755,23 +758,25 @@ class VerifiedRunTest(unittest.TestCase):
             self.root,
             self.initial() + AFTER_RELEASE + [GOOD_DECLARATION],
             unsupported=lambda text: [
-                {"item": "timing", "reason": "the quote gives no date"}
+                {"field": "transport.vessel", "reason": "the quote gives no vessel"}
             ],
         )
-        result = self.run_agent(root=self.root, client=fake.client, turns=20)
-        support.release(self.root)
-        resumed = self.resume_run(
-            root=self.root, run_id=result["run_id"], client=fake.client, turns=10
-        )
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
+            support.release(self.root)
+            resumed = self.resume_run(
+                root=self.root, run_id=result["run_id"], client=fake.client, turns=10
+            )
         refused = self.tool_results(result["run_id"], "submit_declaration")[-1]
         self.assertEqual("claims", refused["check"])
         self.assertNotEqual("awaiting_signoff", resumed["status"])
 
     def test_three_refused_declarations_escalate_to_a_person(self) -> None:
         fake = support.scripted(
-            self.root, [support.CHECKLIST, READ_ALL, EARLY_DECLARATION, EARLY_DECLARATION, EARLY_DECLARATION]
+            self.root, [SAD_CHECKLIST, READ_ALL, EARLY_DECLARATION, EARLY_DECLARATION, EARLY_DECLARATION]
         )
-        result = self.run_agent(root=self.root, client=fake.client, turns=10)
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=10)
         self.assertEqual(("needs_input", 5), (result["status"], result["turn"]))
         self.assertEqual(
             "declaration_refused",
@@ -780,8 +785,9 @@ class VerifiedRunTest(unittest.TestCase):
 
     def test_a_flagged_document_cannot_be_read_again(self) -> None:
         reread = ("analyze_document", {"document_ids": ["DOC-DECLARATION"], "request": "x"})
-        fake = support.scripted(self.root, [support.CHECKLIST, READ_ALL, FLAG, reread])
-        result = self.run_agent(root=self.root, client=fake.client, turns=4)
+        fake = support.scripted(self.root, [SAD_CHECKLIST, READ_ALL, FLAG, reread])
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=4)
         self.assertIn(
             "confidential",
             self.tool_results(result["run_id"], "analyze_document")[-1]["error"],
@@ -804,10 +810,16 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         fake = support.scripted(self.root, [])
         declaration = verify.verify_declaration(verify.context(fake.client, self.root, run_id))
         self.assertFalse(declaration["passed"])
-        self.assertTrue(any("no finding" in p for p in declaration["rules"]))
-        checklist = verify.verify_checklist(
-            verify.context(fake.client, self.root, run_id)
+        self.assertTrue(
+            any("neither proven nor escalated" in p for p in declaration["rules"])
         )
+        with mock.patch(
+            "verification.verify_checklist.run_verification",
+            return_value=dict(CHECKLIST_FAIL),
+        ):
+            checklist = verify.verify_checklist(
+                verify.context(fake.client, self.root, run_id)
+            )
         self.assertFalse(checklist["passed"])
         self.assertAlmostEqual(0.83, checklist["score"], places=2)
         self.assertTrue(checklist["feedback"])
@@ -817,21 +829,25 @@ class ContinueFromSessionOneTest(unittest.TestCase):
 
     def test_branch_continues_from_the_checklist_with_verification_on(self) -> None:
         run_id = self._session_one()
-        fake = support.scripted(self.root, [support.CHECKLIST, support.PLAN, READ_ALL])
-        new_id = branch(fake.client, self.root, run_id)
-        self.assertNotEqual(run_id, new_id)
-        progress = support.progress(self.root, new_id)
-        refused = json.loads(progress["messages"][-1]["output"])
-        self.assertEqual({"error", "feedback"}, set(refused))
-        self.assertEqual(
-            (True, "paused", 0),
-            (progress["verification"], progress["status"], progress["turn"]),
-        )
-        self.assertEqual(run_id, progress["notes"]["branched_from"])
-        self.assertEqual("set_checklist", progress["messages"][-2]["name"])
-        resumed = self.resume_run(
-            root=self.root, run_id=new_id, client=fake.client, turns=3
-        )
+        fake = support.scripted(self.root, [SAD_CHECKLIST, support.PLAN, READ_ALL])
+        with mock.patch(
+            "verification.verify_checklist.run_verification",
+            side_effect=[dict(CHECKLIST_FAIL), dict(CHECKLIST_PASS)],
+        ):
+            new_id = branch(fake.client, self.root, run_id)
+            self.assertNotEqual(run_id, new_id)
+            progress = support.progress(self.root, new_id)
+            refused = json.loads(progress["messages"][-1]["output"])
+            self.assertEqual({"error", "feedback"}, set(refused))
+            self.assertEqual(
+                (True, "paused", 0),
+                (progress["verification"], progress["status"], progress["turn"]),
+            )
+            self.assertEqual(run_id, progress["notes"]["branched_from"])
+            self.assertEqual("set_checklist", progress["messages"][-2]["name"])
+            resumed = self.resume_run(
+                root=self.root, run_id=new_id, client=fake.client, turns=3
+            )
         self.assertEqual("paused", resumed["status"])
         first = support.agent_requests(fake)[0]
         self.assertIn("verification layer on", json.dumps(first["input"]))
@@ -850,7 +866,7 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         try:
             fake = support.scripted(
                 self.root,
-                [support.PARTIAL_CHECKLIST, READ_ALL, FACTS[0], FACTS[1], EARLY_DECLARATION],
+                [SAD_PARTIAL, READ_ALL, FACTS[0], FACTS[1], EARLY_DECLARATION],
             )
             result = self.run_agent(root=self.root, client=fake.client, turns=10)
         finally:
