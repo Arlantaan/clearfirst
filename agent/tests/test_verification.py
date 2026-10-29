@@ -201,6 +201,7 @@ def _good_declaration_args():
         "discrepancies": [],
         "open_questions": [
             "importer.name",
+            "exporter.name",
             "valuation.invoice_total",
             "items[0].gross_kg",
             "items[0].net_kg",
@@ -574,6 +575,22 @@ class DeclarationRulesTest(unittest.TestCase):
         self.assertIn("exporter.country is missing.", found)
         self.assertIn("items[0].hs_code is missing.", found)
 
+    def test_two_document_rule_covers_exporter_name_not_invoice_total(self) -> None:
+        self.read(["DOC-MINUTES", "DOC-REPORT"])
+        self.fact("exporter_origin", "DOC-MINUTES", self.PARTNER)
+        self.fact("valuation", "DOC-REPORT", self.GREEN)
+        header = support.header_values()
+        header["exporter"]["name"] = "Lindgren"
+        declaration = {
+            "header": header,
+            "items": [],
+            "discrepancies": [],
+            "open_questions": ["importer.name"],
+        }
+        found = self.problems(declaration)
+        self.assertIn("exporter.name is supported by only one document.", found)
+        self.assertFalse([p for p in found if "invoice_total" in p])
+
     def test_a_good_declaration_has_no_problems(self) -> None:
         self.read(ALL_INITIAL)
         support.release(self.root)
@@ -626,6 +643,7 @@ class DeclarationRulesTest(unittest.TestCase):
             "discrepancies": [],
             "open_questions": [
                 "valuation.invoice_total",
+                "exporter.name",
                 "items[0].gross_kg",
                 "items[0].net_kg",
                 "items[0].packages",

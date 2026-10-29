@@ -19,7 +19,7 @@ from .progress import now
 ITEM_STATUSES = ("open", "proven", "escalated")
 
 
-MAX_FACTS_PER_ITEM = 3
+MAX_FACTS_PER_ITEM = 6
 MAX_CITATIONS = 3  # per header field or item
 
 HEADER_FIELDS = (

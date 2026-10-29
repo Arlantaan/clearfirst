@@ -129,14 +129,14 @@ class KitTest(unittest.TestCase):
         self.assertEqual("proven", case.data["checklist"]["not_ready"]["status"])
         self.assertIn("timing", fact["progress"]["summary"])
 
-    def test_limits_three_facts_per_item_and_three_citations(self) -> None:
+    def test_limits_six_facts_per_item_and_three_citations(self) -> None:
         self.read(["DOC-REPORT", "DOC-MINUTES"])
         case = self.case()
         for _ in range(case_record.MAX_FACTS_PER_ITEM):
             case.record_fact(
                 "not_ready", "DOC-REPORT", 1, "Overall status is green", "x"
             )
-        with self.assertRaisesRegex(case_record.FactLimitError, "already has 3 facts"):
+        with self.assertRaisesRegex(case_record.FactLimitError, "already has 6 facts"):
             case.record_fact(
                 "not_ready", "DOC-REPORT", 1, "Overall status is green", "x"
             )

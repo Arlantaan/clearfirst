@@ -1,7 +1,7 @@
 """record_fact: record one piece of evidence for one checklist item in the case record.
 
 Refused unless the quote is exactly on that page of an analyzed, non-confidential
-document; at most 3 facts per item. The result says which items are still open.
+document; at most 6 facts per item. The result says which items are still open.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ DEFINITION = {
     "type": "function",
     "name": "record_fact",
     "description": "Record evidence for one checklist item in the case record. Refused unless the quote appears "
-    "exactly on that page of an analyzed, non-confidential document. At most 3 facts per item. The result says "
+    "exactly on that page of an analyzed, non-confidential document. At most 6 facts per item. The result says "
     "which items are still open.",
     "parameters": {
         "type": "object",

@@ -15,7 +15,7 @@ Rules:
 2. Every citation matches a recorded fact (same document, page, and quote).
 3. Every cited field's citation comes from a checklist item about that field
    (keywords in the item's question); broker-declared fields take no citation.
-4. gross_kg, net_kg, packages, hs_code, invoice_total and importer.name are quoted
+4. gross_kg, net_kg, packages, hs_code, importer.name and exporter.name are quoted
    in recorded facts from at least two documents, unless named in
    discrepancies/open_questions.
 5. Nothing excluded is cited; a proven signature item has a consistent signature
@@ -161,8 +161,8 @@ def run_verification(ctx, declaration: dict) -> dict:
             continue
         for field in ("gross_kg", "net_kg", "packages", "hs_code"):
             targets.append((f"items[{index}].{field}", item.get(field), True))
-    targets.append(("valuation.invoice_total", _at(header, "valuation.invoice_total"), True))
     targets.append(("importer.name", _at(header, "importer.name"), False))
+    targets.append(("exporter.name", _at(header, "exporter.name"), False))
     for label, value, numeric in targets:
         if named(label):
             continue
