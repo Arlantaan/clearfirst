@@ -225,7 +225,22 @@ class CaseRecord:
         return record
 
     def declaration_refusals(self) -> int:
-        return sum(1 for c in self.data.get("declaration_checks", []) if not c["passed"])
+        """Failed declaration checks since the last answered request.
+
+        A human reply resets the counter: only refusals recorded after the latest
+        answer count toward MAX_REFUSALS.
+        """
+        answered = [
+            r.get("answered", "")
+            for r in self.data.get("requests", [])
+            if r.get("status") == "answered"
+        ]
+        since = max(answered, default="")
+        return sum(
+            1
+            for c in self.data.get("declaration_checks", [])
+            if not c["passed"] and c.get("at", "") > since
+        )
 
     def mark_read(self, document_ids: list) -> None:
         """Remember which documents the agent has read (the escalation rule needs it)."""

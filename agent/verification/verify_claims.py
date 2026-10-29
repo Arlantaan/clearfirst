@@ -4,7 +4,8 @@ Called by the submit_declaration tool after verify_declaration passes, and by ./
 
     run_verification(ctx, declaration) -> {"passed": bool, "feedback": [problem, ...]}
 
-One Muse Spark call judges every cited field in the declaration against its quotes.
+One Muse Spark call judges every cited field in the declaration against its quotes
+(hs_justification excluded: agent reasoning, not a document fact).
 """
 
 from __future__ import annotations
@@ -19,7 +20,10 @@ from openai.types.responses import Response
 PROMPT = """CLAIMS TO CHECK. Each entry below states a declaration field, its filed value, and the exact quotes cited for it.
 For each entry, decide whether the quotes support the value as written. A value that goes
 beyond what its quotes say is unsupported; a quote that merely comes from the same document
-but says nothing about the field does not support it.
+but says nothing about the field does not support it. A quote supports a value when it is
+the same thing in another form: a country name supports its ISO 2-letter code (TURKIYE
+supports TR, CHINA supports CN); numbers match ignoring thousands separators, decimals
+and units; a short package or unit word matches its longer form on the document.
 
 {fields}
 
@@ -61,6 +65,8 @@ def run_verification(ctx, declaration: dict) -> dict:
             if not quotes:
                 continue
             for field in ITEM_FIELDS:
+                if field == "hs_justification":
+                    continue  # agent reasoning, not a document fact
                 claims.append(
                     {
                         "field": f"items[{index}].{field}",

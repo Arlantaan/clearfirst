@@ -425,6 +425,42 @@ class KitTest(unittest.TestCase):
         self.assertIn("importer.tin", result["feedback"][0])
         self.assertIn("quotes do not support it", result["feedback"][0])
 
+    def test_claims_check_states_equivalences_and_skips_hs_justification(self) -> None:
+        from verification import verify_claims
+
+        declaration = support.cited_declaration()
+        seen = {}
+
+        def capture(text):
+            seen["text"] = text
+            return []
+
+        fake = support.scripted(self.root, [], unsupported=capture)
+        ctx = tools.Context(
+            fake.client,
+            self.root,
+            self.run_id,
+            CaseRecord(self.root, self.run_id),
+            True,
+        )
+        result = verify_claims.run_verification(ctx, declaration)
+        self.assertTrue(result["passed"])
+        self.assertIn("TURKIYE", seen["text"])
+        self.assertIn("hs_code", seen["text"])
+        self.assertNotIn("hs_justification", seen["text"])
+
+    def test_declaration_refusals_reset_when_a_request_is_answered(self) -> None:
+        case = self.case()
+        case.set_checklist(support.CHECKLIST_ITEMS)
+        case.record_declaration_check("declaration", ["bad"])
+        case.record_declaration_check("declaration", ["bad"])
+        self.assertEqual(2, case.declaration_refusals())
+        case.open_request("timing", "the draft assessment", "missing_evidence", ["DOC-REPORT"])
+        case.answer_request("R1", "here it is")
+        self.assertEqual(0, case.declaration_refusals())
+        case.record_declaration_check("declaration", ["bad"])
+        self.assertEqual(1, case.declaration_refusals())
+
     def test_verify_evidence_request(self) -> None:
         from verification import verify_evidence_request
 
