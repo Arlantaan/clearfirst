@@ -259,7 +259,7 @@ async function verifyRun(what) {
     const r = await api(`/api/runs/${selected}/verify`, {what});
     const problems = asList(r.rules).length + asList(r.claims).length;
     verifyFresh = {run: selected, what}; setTimeout(() => { verifyFresh = null; }, 3000);
-    toast(what === "memo" ? `Memo check done: ${r.passed ? "passes" : `fails (${problems} problem${problems === 1 ? "" : "s"})`}`
+    toast(what === "declaration" ? `Declaration check done: ${r.passed ? "passes" : `fails (${problems} problem${problems === 1 ? "" : "s"})`}`
                           : `Checklist check done: ${r.passed ? "passes" : "fails"} · coverage ${pct(r.score)}`);
   } catch (e) { verifyError = {run: selected, msg: `Could not verify the ${what}: ${e.message}`}; toast(verifyError.msg, true); }
   finally { setVerifyBusy(null); poll(); }
@@ -316,18 +316,18 @@ function describe(ev) {
     case "tool_call": {
       if (a !== "agent") return {c:"k-tool minor", i:"⚙", t:p.tool_name, d:""};
       const args = (p.arguments && typeof p.arguments === "object") ? p.arguments : {}; const n = p.tool_name;
-      let d = n === "record_fact" ? `${txt(args.item)} ← ${txt(args.document_id)} p${txt(args.page)}: “${short(txt(args.quote), 110)}”` : n === "analyze_document" ? `${asList(args.document_ids).map(txt).join(", ")} — ${short(txt(args.request), 80)}` : n === "check_signatures" ? `${txt(args.document_id)} p${txt(args.page)} · ${txt(args.signer)} · against ${txt(args.reference_document_id)} p${txt(args.reference_page)}` : n === "request_evidence" ? `${txt(args.item)}: ${short(txt(args.need), 140)}` : n === "flag_privileged" ? `${txt(args.document_id)}: ${short(txt(args.reason), 100)}` : n === "submit_memo" ? short(txt(args.conclusion), 140) : n === "update_plan" ? `${asList(args.plan).length} steps` : n === "set_checklist" ? `${asList(args.items).length} items: ${idsOf(args.items).map(txt).join(", ")}` : "";
+      let d = n === "record_fact" ? `${txt(args.item)} ← ${txt(args.document_id)} p${txt(args.page)}: “${short(txt(args.quote), 110)}”` : n === "analyze_document" ? `${asList(args.document_ids).map(txt).join(", ")} — ${short(txt(args.request), 80)}` : n === "check_signatures" ? `${txt(args.document_id)} p${txt(args.page)} · ${txt(args.signer)} · against ${txt(args.reference_document_id)} p${txt(args.reference_page)}` : n === "request_evidence" ? `${txt(args.item)}: ${short(txt(args.need), 140)}` : n === "flag_privileged" ? `${txt(args.document_id)}: ${short(txt(args.reason), 100)}` : n === "submit_declaration" ? short(txt(args.conclusion), 140) : n === "update_plan" ? `${asList(args.plan).length} steps` : n === "set_checklist" ? `${asList(args.items).length} items: ${idsOf(args.items).map(txt).join(", ")}` : "";
       return {c:"k-call", i:"⚙", t:`Calls ${n}`, d};
     }
     case "tool_result": {
       if (a === "tool" && p.tool_name === undefined) return {c:"k-tool minor", i:"✓", t:"Tool result", d:""};
       const r = p.result || {}, n = p.tool_name;
       if (r.error && n === "set_checklist" && r.feedback !== undefined) return {c: "k-bad", i:"↩", t: "Checklist refused: feedback returned to the agent", d: short(txt(r.feedback), 240)};
-      if (r.error && n === "submit_memo") return {c: "k-bad minor", i:"↩", t: `Memo refused by the ${r.check === "claims" ? "claims check" : "memo rules"}: problems returned to the agent`, d: ""};
+      if (r.error && n === "submit_declaration") return {c: "k-bad minor", i:"↩", t: `Declaration refused by the ${r.check === "claims" ? "claims check" : "declaration rules"}: problems returned to the agent`, d: ""};
       if (r.error && n === "record_fact") return {c: "k-bad minor", i:"↩", t: "Returned to the agent to correct", d: ""};
       if (r.error) return {c: "k-bad", i:"✕", t: `${n} refused`, d: short(txt(r.error), 240)};
       if (r.escalated) return {c:"k-esc minor", i:"!", t:"Escalation recorded; run pauses", d:""};
-      if (r.filed) return {c: r.memo === "unverified" ? "k-run" : "k-ok", i:"■", t: r.memo === "unverified" ? "Memo filed (unverified)" : "Memo filed for attorney sign-off", d:""};
+      if (r.filed) return {c: r.declaration === "unverified" ? "k-run" : "k-ok", i:"■", t: r.declaration === "unverified" ? "Declaration filed (unverified)" : "Declaration filed for broker sign-off", d:""};
       if (r.recorded) return {c:"k-ok minor", i:"✓", t: typeof r.recorded === "object" ? `Fact ${txt(r.recorded.id)} recorded for ${txt(r.recorded.item)}` : "Fact recorded", d:""};
       if (r.flagged) return {c:"k-esc minor", i:"⚑", t:`${txt(r.flagged.document_id ?? r.document_id ?? "")} flagged confidential`, d:""};
       if (r.verdict) return {c:"k-sig", i:"✍", t:`Signature ${txt(r.verdict)}`, d:`${txt(r.document_id)} p${txt(r.page)}: ${short(txt(r.reason), 160)}`};
@@ -340,16 +340,16 @@ function describe(ev) {
     }
     case "verification":
       if (p.check === "checklist") return p.passed ? {c:"k-ok", i:"✓", t:`Checklist check passed (coverage ${pct(p.score)})`, d:""} : {c: p.accepted ? "k-esc" : "k-bad", i:"✕", t:`Checklist check failed (coverage ${pct(p.score)})${p.accepted ? `: accepted after ${p.attempt} tries` : ""}`, d: short(txt(p.feedback), 240)};
-      if (p.check === "memo") return p.passed ? {c:"k-ok", i:"✓", t:"Memo rules passed: every item settled, every citation matches a recorded fact", d:""} : {c:"k-bad", i:"✕", t:"Memo rules failed", d: asList(p.problems).map(txt).join(" · ")};
+      if (p.check === "declaration") return p.passed ? {c:"k-ok", i:"✓", t:"Declaration rules passed: every item settled, every citation matches a recorded fact", d:""} : {c:"k-bad", i:"✕", t:"Declaration rules failed", d: asList(p.problems).map(txt).join(" · ")};
       if (p.check === "claims") return p.passed ? {c:"k-ok", i:"✓", t:"Claims check passed: every finding is supported by its quotes", d:""} : {c:"k-bad", i:"✕", t:"Claims check failed", d: asList(p.problems).map(txt).join(" · ")};
       return p.passed ? {c:"k-ok minor", i:"✓", t:"Quote verified against the saved document text", d:""} : {c:"k-bad", i:"✕", t:"Quote rejected: not in the document", d: short(p.reason, 200)};
     case "branched": return {c: p.passed ? "k-ok" : "k-bad", i:"⑂", t:`Continued from ${p.branched_from}'s checklist with verification on`, d: p.passed === null ? "" : (p.passed ? `Checklist check passed (coverage ${pct(p.score)})` : `Checklist refused (coverage ${pct(p.score)}): ${short(txt(p.feedback), 200)}`)};
     case "flag": return {c:"k-esc minor", i:"⚑", t:`Confidential Doc/Info: ${p.document_id}`, d:"Excluded; never citable"};
-    case "escalation": return p.rule === "memo_signoff" ? {c:"k-sig", i:"✍", t:"Waiting for attorney sign-off", d:""} : {c:"k-esc", i:"!", t:`Escalated to a person (${p.rule}) · ${p.item}`, d: p.need};
+    case "escalation": return p.rule === "declaration_signoff" ? {c:"k-sig", i:"✍", t:"Waiting for broker sign-off", d:""} : {c:"k-esc", i:"!", t:`Escalated to a person (${p.rule}) · ${p.item}`, d: p.need};
     case "resume_refused": return {c:"k-bad", i:"✕", t:"Resume refused", d:p.reason};
     case "state_snapshot": return {c:"k-tool minor", i:"💾", t:"State saved", d:`turn ${p.turn} · ${p.status}`};
     case "turn_summary": return null;
-    case "run_finished": return {c: p.status === "done" ? "k-ok" : (p.status === "needs_input" ? "k-esc" : (p.status === "awaiting_signoff" ? "k-sig" : "k-run")), i:"■", t:`Run stopped: ${p.status}`, d: ({needs_input:"Waiting for a person", paused:"Hit the turn limit", awaiting_signoff:"Memo waiting for sign-off", answered:"Memo filed without checks", done:"Signed off"})[p.status] || ""};
+    case "run_finished": return {c: p.status === "done" ? "k-ok" : (p.status === "needs_input" ? "k-esc" : (p.status === "awaiting_signoff" ? "k-sig" : "k-run")), i:"■", t:`Run stopped: ${p.status}`, d: ({needs_input:"Waiting for a person", paused:"Hit the turn limit", awaiting_signoff:"Declaration waiting for sign-off", answered:"Declaration filed without checks", done:"Signed off"})[p.status] || ""};
     case "error": return {c:"k-bad", i:"✕", t:"Error", d: short(p.error, 240)};
     default: return {c:"k-tool minor", i:"•", t:k, d: short(JSON.stringify(p), 140)};
   }
@@ -383,13 +383,13 @@ function subSteps(result) {
 }
 function observeOf(items, result) {
   const esc_ = items.find(it => it.ev.event_type === "escalation");
-  const gate = [...items].reverse().find(it => it.ev.event_type === "verification" && ["memo", "claims"].includes((it.ev.payload || {}).check));
+  const gate = [...items].reverse().find(it => it.ev.event_type === "verification" && ["declaration", "claims"].includes((it.ev.payload || {}).check));
   const ckv = items.find(it => it.ev.event_type === "verification" && (it.ev.payload || {}).check === "checklist");
-  if (ckv) { const p = ckv.ev.payload || {}, r = (result.ev.payload || {}).result || {}; return p.passed ? {c: "k-ok", t: `Checklist set (${idsOf(r.checklist).length} items); check passed (coverage ${pct(p.score)})`} : p.accepted ? {c: "k-esc", t: `Checklist accepted after ${p.attempt} tries (coverage ${pct(p.score)}); the attorney sees what it misses`, d: short(txt(p.feedback), 240)} : {c: "k-bad", t: `Checklist refused (coverage ${pct(p.score)}): feedback returned to the agent`, d: short(txt(r.feedback), 240)}; }
-  if (esc_) { const p = esc_.ev.payload || {}; return p.rule === "memo_signoff" ? {c: "k-sig", t: "Memo passed the memo rules and the claims check; waiting for attorney sign-off"} : {c: "k-esc", t: `Escalated to a person · ${itemLabel(p.item)} (${p.rule})`, d: p.need}; }
+  if (ckv) { const p = ckv.ev.payload || {}, r = (result.ev.payload || {}).result || {}; return p.passed ? {c: "k-ok", t: `Checklist set (${idsOf(r.checklist).length} items); check passed (coverage ${pct(p.score)})`} : p.accepted ? {c: "k-esc", t: `Checklist accepted after ${p.attempt} tries (coverage ${pct(p.score)}); the broker sees what it misses`, d: short(txt(p.feedback), 240)} : {c: "k-bad", t: `Checklist refused (coverage ${pct(p.score)}): feedback returned to the agent`, d: short(txt(r.feedback), 240)}; }
+  if (esc_) { const p = esc_.ev.payload || {}; return p.rule === "declaration_signoff" ? {c: "k-sig", t: "Declaration passed the declaration rules and the claims check; waiting for broker sign-off"} : {c: "k-esc", t: `Escalated to a person · ${itemLabel(p.item)} (${p.rule})`, d: p.need}; }
   const x = describe(result.ev);
   const gp = gate ? gate.ev.payload || {} : null;
-  if (gp && !gp.passed) return {c: "k-bad", t: `Memo refused by the ${gp.check === "claims" ? "claims check" : "memo rules"}: problems returned to the agent`, d: asList(gp.problems).map(txt).join(" · ")};
+  if (gp && !gp.passed) return {c: "k-bad", t: `Declaration refused by the ${gp.check === "claims" ? "claims check" : "declaration rules"}: problems returned to the agent`, d: asList(gp.problems).map(txt).join(" · ")};
   if ((result.ev.payload || {}).tool_name === "record_fact" && (result.ev.payload.result || {}).error) return {c: "k-bad", t: "Fact refused: returned to the agent to correct", d: short(txt(result.ev.payload.result.error), 200)};
   return x;
 }
@@ -477,11 +477,11 @@ function checklistSummary(cs) {
 function factsFor(cs, item) { return (cs.facts || []).filter(f => f.item === item); }
 function citeHtml(c) { return `<div class="fact"><span class="src">${esc(c.document_id)} · p${esc(c.page)}</span> <span class="q">“${esc(short(c.quote, 180))}”</span></div>`; }
 
-function memoHtml(memo, cs) {
-  // The memo itself; each finding's evidence is in the checklist panel (click a finding to show it there).
-  const gaps = asList(memo.gaps).map(txt).join("\n").split(/\n+|;\s+(?=[A-Z])/).map(g => g.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
-  return `<div style="font-size:15px;font-weight:600;margin:2px 0 6px">${esc(txt(memo.conclusion))}</div>` +
-    asList(memo.findings).filter(f => f && typeof f === "object").map(f => { const n = asList(f.citations).length; return `<div class="finding clickable" onclick="showItem('${esc(txt(f.item))}')" title="Show this item's evidence in the checklist"><span class="badge s-${f.status === "proven" ? "proven" : (f.status === "escalated" ? "escalated" : "open")}">${esc(txt(f.status))}</span> <b>${esc(itemLabel(f.item))}</b> — ${esc(txt(f.summary))} <span class="muted small">${n} citation${n === 1 ? "" : "s"} ›</span></div>`; }).join("") +
+function declarationHtml(declaration, cs) {
+  // The declaration itself; each finding's evidence is in the checklist panel (click a finding to show it there).
+  const gaps = asList(declaration.gaps).map(txt).join("\n").split(/\n+|;\s+(?=[A-Z])/).map(g => g.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  return `<div style="font-size:15px;font-weight:600;margin:2px 0 6px">${esc(txt(declaration.conclusion))}</div>` +
+    asList(declaration.findings).filter(f => f && typeof f === "object").map(f => { const n = asList(f.citations).length; return `<div class="finding clickable" onclick="showItem('${esc(txt(f.item))}')" title="Show this item's evidence in the checklist"><span class="badge s-${f.status === "proven" ? "proven" : (f.status === "escalated" ? "escalated" : "open")}">${esc(txt(f.status))}</span> <b>${esc(itemLabel(f.item))}</b> — ${esc(txt(f.summary))} <span class="muted small">${n} citation${n === 1 ? "" : "s"} ›</span></div>`; }).join("") +
     (gaps.length ? `<div class="small" style="margin-top:8px"><b>Gaps</b><ul class="gaps">${gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul></div>` : "");
 }
 function setHtml(el, html) {
@@ -512,37 +512,37 @@ function renderCards() {
         <button class="primary" ${!withheld && !busy ? "" : "disabled"} onclick="resumeRun(15)">2 · Resume this run</button></div>`
       : `<textarea id="answerNotes" placeholder="Reply to the agent"></textarea><div class="steps" style="margin-top:6px"><button class="primary" ${busy ? "disabled" : ""} onclick="answerRequest('${esc(req.id)}')">Send reply and resume</button></div>`}</div>`;
   }
-  const memo = cs.memo;
-  if (memo && memo.status === "awaiting_signoff" && d.status !== "running") {
+  const declaration = cs.declaration;
+  if (declaration && declaration.status === "awaiting_signoff" && d.status !== "running") {
     const flags = cs.flags || [];
-    html += `<div class="panel card-violet"><h2>Attorney sign-off · memo waiting for you</h2>${memoHtml(memo, cs)}
+    html += `<div class="panel card-violet"><h2>Broker sign-off · declaration waiting for you</h2>${declarationHtml(declaration, cs)}
       <div class="kv" style="margin-top:8px"><b>Checklist</b><span>${esc(checklistSummary(cs))}</span></div>
       ${flags.length ? `<div class="kv" style="margin-top:8px"><b>Flags to confirm</b><span>${flags.map(f => `${esc(f.kind === "privileged" ? "Confidential Doc/Info" : "Signature")}: ${esc(f.document_id)} — ${esc(short(f.reason, 120))}`).join("<br>")}</span></div>` : ""}
       <textarea id="signoffNotes" placeholder="Notes (required to reject)"></textarea>
-      <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve memo</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Reject with notes</button></div></div>`;
-  } else if (memo && (memo.status === "approved" || d.status === "done")) {
-    html += `<div class="panel card-green"><h2>Signed-off memo</h2>${memoHtml(memo, cs)}</div>`;
-  } else if (memo && memo.status === "unverified") {
-    html += `<div class="panel card-yellow"><h2>Memo</h2>${memoHtml(memo, cs)}<div class="small" style="margin-top:6px">Would you sign off on this? Pick one finding and find the page that proves it in the checklist.</div></div>`;
-  } else if (memo && memo.status === "rejected") {
-    html += `<div class="panel card-amber"><h2>Memo rejected · back with the agent</h2><div class="small">${esc((memo.review || {}).notes)}</div></div>`;
+      <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve declaration</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Reject with notes</button></div></div>`;
+  } else if (declaration && (declaration.status === "approved" || d.status === "done")) {
+    html += `<div class="panel card-green"><h2>Signed-off declaration</h2>${declarationHtml(declaration, cs)}</div>`;
+  } else if (declaration && declaration.status === "unverified") {
+    html += `<div class="panel card-yellow"><h2>Declaration</h2>${declarationHtml(declaration, cs)}<div class="small" style="margin-top:6px">Would you sign off on this? Pick one finding and find the page that proves it in the checklist.</div></div>`;
+  } else if (declaration && declaration.status === "rejected") {
+    html += `<div class="panel card-amber"><h2>Declaration rejected · back with the agent</h2><div class="small">${esc((declaration.review || {}).notes)}</div></div>`;
   }
   if (!d.job && ["answered", "paused", "awaiting_signoff", "done", "needs_input"].includes(d.status) && !(d.state || {}).verification) {
     const results = (d.verification || []).slice().reverse();
     const when = r => r.at ? ` <span class="when">· checked ${esc(time(r.at))}</span>` : "";
-    const line = r => `<div class="kv vresult${verifyFresh && verifyFresh.run === d.id && verifyFresh.what === r.what ? " fresh" : ""}">` + (r.what === "memo"
-      ? `<b>Memo</b><span>${r.passed ? "✓ passes" : "✕ fails"}${when(r)}${[...asList(r.rules).map(p => `<br>· rule: ${esc(txt(p))}`), ...asList(r.claims).map(p => `<br>· claim: ${esc(txt(p))}`)].join("")}</span>`
+    const line = r => `<div class="kv vresult${verifyFresh && verifyFresh.run === d.id && verifyFresh.what === r.what ? " fresh" : ""}">` + (r.what === "declaration"
+      ? `<b>Declaration</b><span>${r.passed ? "✓ passes" : "✕ fails"}${when(r)}${[...asList(r.rules).map(p => `<br>· rule: ${esc(txt(p))}`), ...asList(r.claims).map(p => `<br>· claim: ${esc(txt(p))}`)].join("")}</span>`
       : `<b>Checklist</b><span>${r.passed ? "✓ passes" : "✕ fails"} · ground-truth coverage ${pct(r.score)}${when(r)}${r.feedback ? `<br>Feedback the agent would get: ${esc(r.feedback)}` : ""}</span>`) + `</div>`;
     const seen = new Set(); const latest = results.filter(r => !seen.has(r.what) && seen.add(r.what));
     const pending = verifyBusy && verifyBusy.run === d.id ? verifyBusy.action : null;
     const off = busy || verifyBusy ? "disabled" : "";
     const label = (what, text, cls = "") => `<button class="${cls}" ${off} onclick="${what === "branch" ? "branchRun()" : `verifyRun('${what}')`}">${pending === what ? "Working…" : text}</button>`;
-    const status = pending === "memo" ? "Checking the memo: the memo rules, then the claims check (one Muse Spark call). Usually 10–30 seconds."
+    const status = pending === "declaration" ? "Checking the declaration: the declaration rules, then the claims check (one Muse Spark call). Usually 10–30 seconds."
       : pending === "checklist" ? "Checking the checklist against the case's ground truth (one Muse Spark call). Usually 10–30 seconds."
       : pending === "branch" ? "Starting a new run from this run's checklist, with verification on. The checklist check runs first, then the new run opens here."
       : "";
     html += `<div class="panel"><h2>Verify this run</h2><div class="small" style="margin-bottom:6px">Run the verification checks on the work this run already did. The agent is not involved and the run is not changed. <b>Continue from the checklist</b> starts a new run with verification on, from this run's checklist.</div>
-      <div class="steps">${label("memo", "Verify the memo")}${label("checklist", "Verify the checklist")}${label("branch", "Continue from the checklist, verification on", "primary")}</div>
+      <div class="steps">${label("declaration", "Verify the declaration")}${label("checklist", "Verify the checklist")}${label("branch", "Continue from the checklist, verification on", "primary")}</div>
       ${status ? `<div class="vstatus"><div class="spinner"></div><span>${status}</span></div>` : ""}
       ${verifyError && verifyError.run === d.id && !pending ? `<div class="vstatus err">${esc(verifyError.msg)}</div>` : ""}
       ${latest.length ? latest.map(line).join("") : (pending ? "" : `<div class="small muted" style="margin-top:8px">No checks run yet.</div>`)}</div>`;
@@ -631,7 +631,7 @@ async function poll() {
     if (last && last.run_id && last.running && last.run_id !== selected && autoFollow) { autoFollow = null; select(last.run_id); return; }
     if (last && !last.running && last.returncode && !last.run_id && !shownFailures.has(last.id)) { shownFailures.add(last.id); toast(`Agent failed: ${short(last.log, 220)}`, true); }
     const runs = await api("/api/runs"); renderRuns(runs);
-    if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press ▶ Start agent${info.agent_ready ? "" : " (build legal_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
+    if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press ▶ Start agent${info.agent_ready ? "" : " (build customs_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
     if (!selected && runs.length && !window._picked) { window._picked = true; select(runs[0].id); return; }
     if (selected) {
       const d = await api(`/api/runs/${selected}`);

@@ -142,10 +142,10 @@ def build_events(  # noqa: C901
                     accepted=bool(check.get("accepted")),
                     attempt=check.get("attempt"),
                 )
-        if name == "submit_memo" and result.get("problems"):
-            which = result.get("check", "memo")
+        if name == "submit_declaration" and result.get("problems"):
+            which = result.get("check", "declaration")
             if which == "claims":
-                add("verification", "agent", stamp, turn=n, check="memo", passed=True)
+                add("verification", "agent", stamp, turn=n, check="declaration", passed=True)
             add(
                 "verification",
                 "agent",
@@ -156,15 +156,15 @@ def build_events(  # noqa: C901
                 problems=result["problems"],
             )
         if result.get("filed") and result.get("status") == "awaiting_signoff":
-            add("verification", "agent", stamp, turn=n, check="memo", passed=True)
+            add("verification", "agent", stamp, turn=n, check="declaration", passed=True)
             add("verification", "agent", stamp, turn=n, check="claims", passed=True)
             add(
                 "escalation",
                 "agent",
                 stamp,
                 turn=n,
-                rule="memo_signoff",
-                need="Attorney sign-off on the filed memo.",
+                rule="declaration_signoff",
+                need="Broker sign-off on the filed declaration.",
             )
         if result.get("escalated"):
             request = requests.get(result.get("request"), {})
@@ -518,7 +518,7 @@ class Console:
         }
 
     def _agent_ready(self) -> bool:
-        loop = self.agent / "legal_agent/loop.py"
+        loop = self.agent / "customs_agent/loop.py"
         return loop.is_file() and "is not implemented yet" not in loop.read_text()
 
     # ---- reads ----
@@ -705,10 +705,10 @@ class Console:
         return self._cmd(argv, self.agent)
 
     def verify(self, run_id: str, what: str) -> dict:
-        """./helper verify RUN --memo | --checklist: the checks on a finished run's work."""
+        """./helper verify RUN --declaration | --checklist: the checks on a finished run's work."""
         self._run_dir(run_id)
-        if what not in ("memo", "checklist"):
-            raise RuntimeError("verify the memo or the checklist")
+        if what not in ("declaration", "checklist"):
+            raise RuntimeError("verify the declaration or the checklist")
         out = subprocess.run(
             ["./helper", "verify", run_id, f"--{what}", "--json"],
             cwd=self.agent,
