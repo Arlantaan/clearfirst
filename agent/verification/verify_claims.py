@@ -4,8 +4,10 @@ Called by the submit_declaration tool after verify_declaration passes, and by ./
 
     run_verification(ctx, declaration) -> {"passed": bool, "feedback": [problem, ...]}
 
-One Muse Spark call judges every cited field in the declaration against its quotes
-(hs_justification excluded: agent reasoning, not a document fact).
+One Muse Spark call judges every cited free-text field in the declaration against
+its quotes. Codes, numbers and identifiers are not sent (the declaration rules
+already validate those against recorded facts), nor hs_justification (agent
+reasoning, not a document fact).
 """
 
 from __future__ import annotations
@@ -16,6 +18,17 @@ from typing import cast
 from agent_kit.case_record import ITEM_FIELDS
 from agent_kit.settings import model
 from openai.types.responses import Response
+
+JUDGED_HEADER_FIELDS = frozenset(
+    {
+        "importer.name",
+        "exporter.name",
+        "transport.vessel",
+        "transport.port_of_loading",
+        "transport.port_of_discharge",
+    }
+)
+JUDGED_ITEM_FIELDS = frozenset({"description", "package_kind", "supplementary_unit"})
 
 PROMPT = """CLAIMS TO CHECK. Each entry below states a declaration field, its filed value, and the exact quotes cited for it.
 For each entry, decide whether the quotes support the value as written. A value that goes
@@ -39,6 +52,8 @@ def run_verification(ctx, declaration: dict) -> dict:
     citations = header.get("citations") or {}
     if isinstance(citations, dict):
         for path, entries in citations.items():
+            if str(path) not in JUDGED_HEADER_FIELDS:
+                continue
             quotes = [
                 c.get("quote", "")
                 for c in (entries or [])
@@ -65,8 +80,8 @@ def run_verification(ctx, declaration: dict) -> dict:
             if not quotes:
                 continue
             for field in ITEM_FIELDS:
-                if field == "hs_justification":
-                    continue  # agent reasoning, not a document fact
+                if field not in JUDGED_ITEM_FIELDS:
+                    continue
                 claims.append(
                     {
                         "field": f"items[{index}].{field}",

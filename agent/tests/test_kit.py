@@ -410,7 +410,7 @@ class KitTest(unittest.TestCase):
             self.root,
             [],
             unsupported=lambda text: [
-                {"field": "importer.tin", "reason": "off topic"}
+                {"field": "importer.name", "reason": "off topic"}
             ],
         )
         ctx = tools.Context(
@@ -422,7 +422,7 @@ class KitTest(unittest.TestCase):
         )
         result = verify_claims.run_verification(ctx, declaration)
         self.assertFalse(result["passed"])
-        self.assertIn("importer.tin", result["feedback"][0])
+        self.assertIn("importer.name", result["feedback"][0])
         self.assertIn("quotes do not support it", result["feedback"][0])
 
     def test_claims_check_states_equivalences_and_skips_hs_justification(self) -> None:
@@ -446,7 +446,9 @@ class KitTest(unittest.TestCase):
         result = verify_claims.run_verification(ctx, declaration)
         self.assertTrue(result["passed"])
         self.assertIn("TURKIYE", seen["text"])
-        self.assertIn("hs_code", seen["text"])
+        self.assertIn("importer.name", seen["text"])
+        self.assertNotIn("hs_code", seen["text"])
+        self.assertNotIn("importer.tin", seen["text"])
         self.assertNotIn("hs_justification", seen["text"])
 
     def test_declaration_refusals_reset_when_a_request_is_answered(self) -> None:
