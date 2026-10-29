@@ -403,7 +403,7 @@ class KitTest(unittest.TestCase):
 
         declaration = support.cited_declaration()
         self.assertEqual(
-            {"passed": True, "feedback": []},
+            {"passed": True, "feedback": [], "unsupported": []},
             verify_claims.run_verification(self.ctx(), declaration),
         )
         fake = support.scripted(
@@ -461,6 +461,8 @@ class KitTest(unittest.TestCase):
         case.answer_request("R1", "here it is")
         self.assertEqual(0, case.declaration_refusals())
         case.record_declaration_check("declaration", ["bad"])
+        self.assertEqual(1, case.declaration_refusals())
+        case.record_declaration_check("claims", ["bad"])
         self.assertEqual(1, case.declaration_refusals())
 
     def test_verify_evidence_request(self) -> None:

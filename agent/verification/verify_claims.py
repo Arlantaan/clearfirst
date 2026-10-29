@@ -8,6 +8,9 @@ One Muse Spark call judges every cited free-text field in the declaration agains
 its quotes. Codes, numbers and identifiers are not sent (the declaration rules
 already validate those against recorded facts), nor hs_justification (agent
 reasoning, not a document fact).
+
+Advisory: the caller files unsupported claims as "claim" flags for the broker
+instead of refusing. The result carries them structured under "unsupported".
 """
 
 from __future__ import annotations
@@ -90,7 +93,7 @@ def run_verification(ctx, declaration: dict) -> dict:
                     }
                 )
     if not claims:
-        return {"passed": True, "feedback": []}
+        return {"passed": True, "feedback": [], "unsupported": []}
     response = cast(
         Response,
         ctx.client.responses.create(
@@ -105,14 +108,26 @@ def run_verification(ctx, declaration: dict) -> dict:
         return {
             "passed": True,
             "feedback": [],
+            "unsupported": [],
         }  # an unreadable judgement never blocks the declaration
     values = {claim["field"]: claim["value"] for claim in claims}
-    problems = [
-        f"{u.get('field')}: {values.get(u.get('field'), '')} — quotes do not support it"
-        for u in unsupported
-        if isinstance(u, dict)
-    ]
-    return {"passed": not problems, "feedback": problems}
+    problems, details = [], []
+    for u in unsupported:
+        if not isinstance(u, dict):
+            continue
+        problem = (
+            f"{u.get('field')}: {values.get(u.get('field'), '')} — quotes do not support it"
+        )
+        problems.append(problem)
+        details.append(
+            {
+                "field": u.get("field"),
+                "value": values.get(u.get("field"), ""),
+                "reason": u.get("reason", ""),
+                "problem": problem,
+            }
+        )
+    return {"passed": not problems, "feedback": problems, "unsupported": details}
 
 
 def _at(mapping: dict, path: str):

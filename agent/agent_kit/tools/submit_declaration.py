@@ -7,10 +7,11 @@ refused naming the missing fields. declaration_type and procedure_code are the
 broker's choice and take no citation.
 
 Verification off: the declaration is filed unverified and the run ends (answered).
-Verification on: the declaration rules (verification/verify_declaration.py) run first,
-then the claims check (verification/verify_claims.py). A declaration that fails is
-refused with the problems; after MAX_REFUSALS refused declarations the run escalates
-to a person. A declaration that passes both waits for broker sign-off (awaiting_signoff).
+Verification on: the declaration rules (verification/verify_declaration.py) run first
+and block: a declaration that fails them is refused with the problems, and after
+MAX_REFUSALS refusals the run escalates to a person. The claims check
+(verification/verify_claims.py) is advisory: unsupported claims are filed as "claim"
+flags for the broker, and the declaration still waits for sign-off (awaiting_signoff).
 """
 
 from __future__ import annotations
@@ -197,17 +198,10 @@ def run(ctx: Context, args: dict) -> dict:
     verify_declaration = importlib.import_module(
         "verification.verify_declaration"
     )  # yours, built in Session 2
-    check, result = "declaration", verify_declaration.run_verification(ctx, declaration)
-    if result.get("passed"):
-        ctx.case.record_declaration_check("declaration", [])
-        check, result = "claims", verify_claims.run_verification(ctx, declaration)
-    problems = (
-        []
-        if result.get("passed")
-        else [str(p) for p in result.get("feedback") or ["refused"]]
-    )
-    ctx.case.record_declaration_check(check, problems)
-    if problems:
+    result = verify_declaration.run_verification(ctx, declaration)
+    if not result.get("passed"):
+        problems = [str(p) for p in result.get("feedback") or ["refused"]]
+        ctx.case.record_declaration_check("declaration", problems)
         if ctx.case.declaration_refusals() >= MAX_REFUSALS:
             checklist = ctx.case.data["checklist"]
             item = next(
@@ -219,6 +213,20 @@ def run(ctx: Context, args: dict) -> dict:
                 + "; ".join(problems)
             )
             return escalate(ctx, item, need, "declaration_refused")
-        return {"error": "declaration refused", "check": check, "problems": problems}
+        return {"error": "declaration refused", "check": "declaration", "problems": problems}
+    ctx.case.record_declaration_check("declaration", [])
+    claims = verify_claims.run_verification(ctx, declaration)
+    ctx.case.record_declaration_check(
+        "claims", [] if claims.get("passed") else [str(p) for p in claims.get("feedback") or ["refused"]]
+    )
+    for entry in claims.get("unsupported") or []:
+        if not isinstance(entry, dict):
+            continue
+        field, value = entry.get("field", ""), entry.get("value", "")
+        ctx.case.add_claim_flag(
+            field,
+            value,
+            entry.get("problem") or f"{field}: {value} — quotes do not support it",
+        )
     ctx.case.file_declaration(declaration, "awaiting_signoff")
     return {"filed": True, "declaration": "awaiting_signoff", "status": "awaiting_signoff"}

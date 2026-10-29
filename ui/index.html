@@ -557,7 +557,7 @@ function renderCards() {
     const flags = cs.flags || [];
     html += `<div class="panel card-violet"><h2>Broker sign-off · declaration waiting for you</h2>${declarationHtml(declaration, cs)}
       <div class="kv" style="margin-top:8px"><b>Checklist</b><span>${esc(checklistSummary(cs))}</span></div>
-      ${flags.length ? `<div class="kv" style="margin-top:8px"><b>Flags to confirm</b><span>${flags.map(f => `${esc(f.kind === "excluded" ? "Excluded document" : "Signature")}: ${esc(f.document_id)} — ${esc(short(f.reason, 120))}`).join("<br>")}</span></div>` : ""}
+      ${flags.length ? `<div class="kv" style="margin-top:8px"><b>Flags to confirm</b><span>${flags.map(f => f.kind === "claim" ? `Claim: ${esc(txt(f.reason) || (txt(f.field) + ": " + txt(f.value)))}` : `${esc(f.kind === "excluded" ? "Excluded document" : "Signature")}: ${esc(f.document_id)} — ${esc(short(f.reason, 120))}`).join("<br>")}</span></div>` : ""}
       <textarea id="signoffNotes" placeholder="Notes (required to reject)"></textarea>
       <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve declaration</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Reject with notes</button></div></div>`;
   } else if (declaration && (declaration.status === "approved" || d.status === "done")) {

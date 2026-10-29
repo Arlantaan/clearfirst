@@ -225,10 +225,10 @@ class CaseRecord:
         return record
 
     def declaration_refusals(self) -> int:
-        """Failed declaration checks since the last answered request.
+        """Failed declaration-rule checks since the last answered request.
 
         A human reply resets the counter: only refusals recorded after the latest
-        answer count toward MAX_REFUSALS.
+        answer count toward MAX_REFUSALS. Advisory claims results never count.
         """
         answered = [
             r.get("answered", "")
@@ -239,8 +239,25 @@ class CaseRecord:
         return sum(
             1
             for c in self.data.get("declaration_checks", [])
-            if not c["passed"] and c.get("at", "") > since
+            if c.get("check") == "declaration"
+            and not c["passed"]
+            and c.get("at", "") > since
         )
+
+    def add_claim_flag(self, field: str, value, reason: str) -> dict:
+        """Flag an unsupported claim for the broker (claims check is advisory)."""
+        flag = {
+            "kind": "claim",
+            "document_id": None,
+            "field": str(field),
+            "value": value,
+            "reason": str(reason),
+            "review": "pending",
+            "at": now(),
+        }
+        self.data.setdefault("flags", []).append(flag)
+        self._save("claim_flagged", "verification", {"field": field})
+        return flag
 
     def mark_read(self, document_ids: list) -> None:
         """Remember which documents the agent has read (the escalation rule needs it)."""

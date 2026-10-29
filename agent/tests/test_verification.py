@@ -821,7 +821,7 @@ class VerifiedRunTest(unittest.TestCase):
         self.assertEqual("awaiting_signoff", again["status"])
         self.assertIn("rejected", str(support.agent_requests(fake)[-1]["input"]))
 
-    def test_unsupported_claims_refuse_the_declaration(self) -> None:
+    def test_unsupported_claims_file_with_claim_flags(self) -> None:
         fake = support.scripted(
             self.root,
             self.initial() + AFTER_RELEASE + [GOOD_DECLARATION],
@@ -835,9 +835,17 @@ class VerifiedRunTest(unittest.TestCase):
             resumed = self.resume_run(
                 root=self.root, run_id=result["run_id"], client=fake.client, turns=10
             )
-        refused = self.tool_results(result["run_id"], "submit_declaration")[-1]
-        self.assertEqual("claims", refused["check"])
-        self.assertNotEqual("awaiting_signoff", resumed["status"])
+        self.assertEqual("awaiting_signoff", resumed["status"])
+        case = support.case(self.root, result["run_id"])
+        flags = [f for f in case["flags"] if f["kind"] == "claim"]
+        self.assertEqual(1, len(flags))
+        self.assertEqual("transport.vessel", flags[0]["field"])
+        self.assertEqual("MV Meridian", flags[0]["value"])
+        self.assertIn("quotes do not support it", flags[0]["reason"])
+        self.assertEqual(
+            ["declaration", "declaration", "claims"],
+            [c["check"] for c in case["declaration_checks"]],
+        )
 
     def test_three_refused_declarations_escalate_to_a_person(self) -> None:
         fake = support.scripted(
