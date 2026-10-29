@@ -167,6 +167,7 @@ DEFINITION = {
     "HS codes and citations, discrepancies where documents disagree, and open questions. Fill every "
     "header box; every other header and item field must be cited (1-3 quotes) or named in "
     "discrepancies/open_questions. declaration_type and procedure_code take no citation. "
+    "Attach the compute_duty result as duty_estimate. "
     "Example header: {\"importer\": {\"name\": \"...\", \"tin\": \"...\"}, \"citations\": "
     "{\"importer.tin\": [{\"document_id\": \"...\", \"page\": 1, \"quote\": \"...\"}]}}.",
     "parameters": {
@@ -177,6 +178,7 @@ DEFINITION = {
             "items": {"type": "array", "items": LINE_ITEM},
             "discrepancies": {"type": "array", "items": DISCREPANCY},
             "open_questions": {"type": "array", "items": {"type": "string"}},
+            "duty_estimate": {"type": "object"},
         },
         "required": ["header", "items", "discrepancies", "open_questions"],
     },
@@ -190,6 +192,8 @@ def run(ctx: Context, args: dict) -> dict:
         "discrepancies": args.get("discrepancies") or [],
         "open_questions": args.get("open_questions") or [],
     }
+    if args.get("duty_estimate") is not None:
+        declaration["duty_estimate"] = args.get("duty_estimate")
     if not ctx.verification:
         ctx.case.file_declaration(declaration, "unverified")
         return {"filed": True, "declaration": "unverified", "status": "answered"}

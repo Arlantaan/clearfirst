@@ -5,7 +5,7 @@ run(ctx, args) (what happens when the model calls it).
     result = tools.run(client, root, run_id, call)   # run the tool the model chose
     result.get("status", "running")        # "running", or why the run must stop
 
-BASE_TOOLS are the six tools the agent always has. VERIFIER_TOOLS are added for runs
+BASE_TOOLS are the eight tools the agent always has. VERIFIER_TOOLS are added for runs
 started with VERIFICATION=on, and with it on, set_checklist, analyze_document and
 submit_declaration also run the checks in agent/verification/ at their fixed points.
 
@@ -29,8 +29,10 @@ from ..progress import load_progress
 from . import (
     analyze_document,
     check_signatures,
+    compute_duty,
     flag_excluded,
     list_documents,
+    lookup_tariff,
     record_fact,
     request_evidence,
     set_checklist,
@@ -44,6 +46,8 @@ BASE_TOOLS = [
     "list_documents",
     "analyze_document",
     "record_fact",
+    "lookup_tariff",
+    "compute_duty",
     "submit_declaration",
 ]
 VERIFIER_TOOLS = ["flag_excluded", "request_evidence", "check_signatures"]
@@ -56,6 +60,8 @@ MODULES: dict[str, Any] = {
         list_documents,
         analyze_document,
         record_fact,
+        lookup_tariff,
+        compute_duty,
         submit_declaration,
         flag_excluded,
         request_evidence,

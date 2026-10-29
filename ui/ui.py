@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""Agent Console: a pre-built UI to start, watch, and steer the workshop agent.
+"""ClearFirst Broker Console: prepare, watch, and sign off customs declarations.
 
-Standard library only. From the legal-agent-workshop folder:
+Standard library only. From the clearfirst folder:
 
     python3 ui/ui.py
     open http://127.0.0.1:8765
 
-It finds the workshop automatically (the folder that contains ui/). Use
+It finds the project automatically (the folder that contains ui/). Use
 --workshop PATH only to point it at a different clone.
 
 It reads each run's progress.json (agent/workspace/runs/<run>/, written by
 agent_kit.progress) and case record (agent/workspace/case_records/), and acts only
-through the workshop's own commands (./helper run, ./helper review, world/release.py).
-Any agent participants build with Muse Code shows up here as long as it saves its
-progress every turn; the console never imports it.
+through the project's own commands (./helper run, ./helper review, world/release.py).
+The console never imports the agent.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -32,8 +34,38 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 CONSOLE = Path(__file__).resolve().parent
-DEFAULT_WORKSHOP = CONSOLE.parent  # ui/ sits at the root of legal-agent-workshop
+DEFAULT_WORKSHOP = CONSOLE.parent  # ui/ sits at the root of the clearfirst folder
 MAX_TURNS = 200
+
+# Run status -> shipment-list label. "paused" (turn limit hit) needs the broker
+# to resume; "answered" filed and ended.
+CASE_STATUS = {
+    "running": "running",
+    "needs_input": "needs broker",
+    "awaiting_signoff": "awaiting sign-off",
+    "done": "done",
+    "answered": "done",
+    "paused": "needs broker",
+}
+
+# objective.md for a shipment created in the console: the same wording as the
+# existing cases, with the shipment name filled in and no case-specific parties.
+OBJECTIVE_TEMPLATE = """# Assignment: prepare the import declaration for shipment SHIPMENT_NAME
+
+You work for Banjul Clearing & Forwarding Services (declarant code DEC-0417), a licensed customs broker in Banjul. The importer has sent the documents for this shipment.
+
+**The task:** prepare a Single Administrative Document (SAD, IM4 home use) for this shipment that the broker can sign and submit to the Gambia Revenue Authority.
+
+**Why it matters:** a declaration with a wrong value, weight, package count, origin or HS code is queried by customs. Every day the container waits at Banjul port costs the importer storage and demurrage, and a misdeclaration can bring a penalty. The entry must be right the first time.
+
+## What to do
+
+* Read every document rather than assuming: invoice, packing list, bill of lading, certificate of origin. Some fields appear on several documents and must agree.
+* Ground every figure in a document, page and exact quotation. Keep what the documents say separate from what you infer.
+* Classify the goods with an HS code and justify it from the description on the documents.
+* Where documents disagree, or a required field is missing or unreadable, do not guess: flag it as a discrepancy and ask the broker. A declaration filed with a figure that another document contradicts will be queried.
+* Finish with a declaration: every SAD box settled with its evidence, the duty and taxes estimated, and the open questions listed.
+"""
 
 
 def read_json(path: Path):
@@ -408,7 +440,7 @@ class Console:
             root = root.parent  # pointed at agent/
         if not (root / "agent/helper").is_file():
             raise RuntimeError(
-                f"not a legal-agent-workshop folder (no agent/helper): {root}"
+                f"not a ClearFirst folder (no agent/helper): {root}"
             )
         if self.jobs.any_running():
             raise RuntimeError("wait for the running agent to stop first")
@@ -418,7 +450,7 @@ class Console:
     @property
     def agent(self) -> Path:
         if not self.workshop:
-            raise RuntimeError("choose the legal-agent-workshop folder first")
+            raise RuntimeError("choose the ClearFirst folder first")
         return self.workshop / "agent"
 
     @property
@@ -455,27 +487,106 @@ class Console:
             return str(path)
 
     def cases(self) -> list:
-        """Every folder under cases/ that has an objective.md, with its title."""
+        """Every folder under cases/ with an objective.md: title, latest-run
+        status ("not started" when no run belongs to it yet), and run id."""
         folder = self.workshop / "cases" if self.workshop else None
         if not folder or not folder.is_dir():
             return []
         out = []
         for case in sorted(p for p in folder.iterdir() if p.is_dir()):
+            if case.name == "northbridge-v-caldera":
+                continue  # legacy legal demo, not a shipment
             objective = case / "objective.md"
             if not objective.is_file():
                 continue
-            title = next(
-                (
-                    line[2:].strip()
-                    for line in objective.read_text(errors="replace").splitlines()
-                    if line.startswith("# ")
-                ),
-                case.name,
+            words = re.sub(r"[_-]+", " ", case.name).split()
+            human = (
+                " ".join(
+                    [words[0][:1].upper() + words[0][1:].lower()]
+                    + [w.upper() if len(w) <= 2 else w.lower() for w in words[1:]]
+                )
+                if words
+                else case.name
+            )
+            bl = re.search(
+                r"shipment\s+([A-Za-z0-9][A-Za-z0-9\-]*)",
+                objective.read_text(errors="replace"),
             )
             out.append(
-                {"id": case.name, "path": self._display_path(case), "title": title}
+                {
+                    "id": case.name,
+                    "path": self._display_path(case),
+                    "title": human + (f" \u2014 {bl.group(1)}" if bl else ""),
+                }
             )
+        latest = self._latest_run_per_case()
+        for entry in out:
+            run = latest.get(entry["id"])
+            entry["status"] = (
+                CASE_STATUS.get(run["status"], run["status"]) if run else "not started"
+            )
+            entry["run_id"] = run["id"] if run else None
         return out
+
+    def _run_cases(self) -> dict:
+        """run_id -> case id, recorded when the console starts, resumes, or branches a run."""
+        return read_json(self.agent / "workspace/console_runs.json") or {}
+
+    def _record_run_case(self, run_id: str, case_id: str) -> None:
+        path = self.agent / "workspace/console_runs.json"
+        with self.jobs.lock:
+            mapping = read_json(path) or {}
+            mapping[run_id] = case_id
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(mapping))
+            tmp.replace(path)
+
+    def _record_when_known(self, job: dict, case_id: str) -> None:
+        while not job.get("run_id") and job.get("returncode") is None:
+            time.sleep(0.2)
+        if job.get("run_id"):
+            self._record_run_case(job["run_id"], case_id)
+
+    def _latest_run_per_case(self) -> dict:
+        """The newest run per case. list_runs is newest-first, so the first wins.
+        Runs without a mapping are attributed by document match; runs with no
+        documents yet (just started) belong to the current case."""
+        mapping = self._run_cases()
+        current = self.case_dir().name
+        latest: dict = {}
+        for run in self.list_runs():
+            case_id = (
+                mapping.get(run["id"]) or self._attribute_run(run["id"]) or current
+            )
+            latest.setdefault(case_id, run)
+        return latest
+
+    def _attribute_run(self, run_id: str) -> str | None:
+        """Old runs predate the run->case map: match their document ids against
+        each case's documents/ folder and take the best overlap."""
+        case = read_json(self.agent / "workspace/case_records" / f"{run_id}.json")
+        case = case or {}
+        doc_ids = {f.get("document_id") for f in case.get("facts") or []}
+        declaration = case.get("declaration") or {}
+        for cites in ((declaration.get("header") or {}).get("citations") or {}).values():
+            doc_ids |= {c.get("document_id") for c in cites or [] if isinstance(c, dict)}
+        for item in declaration.get("items") or []:
+            cites = item.get("citations") or [] if isinstance(item, dict) else []
+            doc_ids |= {c.get("document_id") for c in cites if isinstance(c, dict)}
+        doc_ids = {d for d in doc_ids if d}
+        if not doc_ids or not self.workshop:
+            return None
+        best, best_n = None, 0
+        for folder in sorted((self.workshop / "cases").iterdir()):
+            documents = folder / "documents"
+            if not documents.is_dir():
+                continue
+            stems = {p.stem for p in documents.iterdir() if p.is_file()}
+            n = len(doc_ids & stems)
+            if n > best_n:
+                best, best_n = folder.name, n
+        return best
 
     def select_case(self, case_id: str) -> dict:
         """Point CASE_DIR in agent/.env at cases/<case_id> and re-seed the inbox."""
@@ -499,6 +610,87 @@ class Console:
         tmp.replace(path)
         self._cmd(["./helper", "reset"], self.agent)
         return self.info()
+
+    SHIPMENT_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png"}
+
+    def _page_renderer(self):
+        """world/utils/build_page_images.render, loaded from its file."""
+        import importlib.util
+
+        path = self.world / "utils/build_page_images.py"
+        spec = importlib.util.spec_from_file_location("build_page_images", path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"page renderer not found: {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.render
+
+    def create_shipment(self, name: str, files: list) -> dict:
+        """cases/<slug>/ from uploaded documents: files, objective.md, page images.
+
+        files is [{filename, data}] with base64 data (JS FileReader output).
+        Selects the new shipment. Page images render with the same function the
+        world builder uses; files that fail to render are listed as warnings
+        instead of failing the shipment.
+        """
+        if not self.workshop:
+            raise RuntimeError("choose the ClearFirst folder first")
+        if self.jobs.any_running():
+            raise RuntimeError("wait for the running agent to stop first")
+        name = " ".join(str(name or "").split())
+        if not name:
+            raise RuntimeError("give the shipment a name")
+        uploads = [
+            f
+            for f in files or []
+            if isinstance(f, dict) and f.get("filename") and f.get("data")
+        ]
+        if not uploads:
+            raise RuntimeError("upload at least one document (PDF, JPG, PNG)")
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "shipment"
+        folder = self.workshop / "cases"
+        target = folder / slug
+        n = 2
+        while target.exists():
+            target = folder / f"{slug}-{n}"
+            n += 1
+        documents = target / "documents"
+        documents.mkdir(parents=True)
+        saved = []
+        try:
+            for upload in uploads:
+                filename = Path(str(upload["filename"])).name
+                if Path(filename).suffix.lower() not in self.SHIPMENT_SUFFIXES:
+                    raise RuntimeError(f"{filename}: only PDF, JPG, PNG documents")
+                try:
+                    raw = base64.b64decode(str(upload["data"]), validate=True)
+                except ValueError:
+                    raise RuntimeError(f"{filename}: not valid base64") from None
+                if len(raw) > 100 * 1024 * 1024:
+                    raise RuntimeError(f"{filename}: larger than 100 MB")
+                (documents / filename).write_bytes(raw)
+                saved.append(filename)
+        except Exception:
+            shutil.rmtree(target, ignore_errors=True)
+            raise
+        (target / "objective.md").write_text(
+            OBJECTIVE_TEMPLATE.replace("SHIPMENT_NAME", name)
+        )
+        warnings = []
+        try:
+            render = self._page_renderer()
+        except RuntimeError as error:
+            render = None
+            warnings.append(str(error))
+        if render is not None:
+            for filename in saved:
+                try:
+                    render(documents / filename, documents / "pages")
+                except Exception as error:
+                    warnings.append(f"{filename}: page images not built ({error})")
+        info = self.select_case(target.name)
+        info["warnings"] = warnings
+        return info
 
     def info(self) -> dict:
         if not self.workshop:
@@ -672,7 +864,15 @@ class Console:
         argv = ["./helper", "run", "--turns", str(turns)]
         if run_id:
             argv += ["--resume", run_id]
-        return self.jobs.start(kind, argv, self.agent, self.runs, run_id)
+        job = self.jobs.start(kind, argv, self.agent, self.runs, run_id)
+        case_id = self.case_dir().name
+        if job.get("run_id"):
+            self._record_run_case(job["run_id"], case_id)
+        else:
+            threading.Thread(
+                target=self._record_when_known, args=(job, case_id), daemon=True
+            ).start()
+        return job
 
     def _cmd(self, argv: list, cwd: Path) -> dict:
         out = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
@@ -732,7 +932,10 @@ class Console:
         )
         if out.returncode:
             raise RuntimeError((out.stderr or out.stdout).strip()[-800:])
-        return _json_result(out.stdout)
+        result = _json_result(out.stdout)
+        if result.get("run_id"):
+            self._record_run_case(result["run_id"], self.case_dir().name)
+        return result
 
     def reset(self, clear_runs: bool) -> dict:
         if self.jobs.any_running():
@@ -740,6 +943,57 @@ class Console:
         return self._cmd(
             ["./helper", "reset"] + (["--clear-runs"] if clear_runs else []), self.agent
         )
+
+    def export_run(self, run_id: str, fmt: str) -> tuple:
+        """The signed-off declaration as a download: (bytes, content type, filename)."""
+        run_dir = self._run_dir(run_id)
+        progress = read_progress(run_dir)
+        case = (
+            read_json(self.agent / "workspace/case_records" / f"{run_id}.json") or {}
+        )
+        declaration = case.get("declaration") or {}
+        if declaration.get("status") != "approved" and progress.get("status") != "done":
+            raise RuntimeError("only a signed-off declaration can be exported")
+        if self.workshop is None:
+            raise RuntimeError("choose the ClearFirst folder first")
+        if fmt == "pdf":
+            import importlib.util
+
+            if importlib.util.find_spec("reportlab") is None:
+                raise ImportError(
+                    "PDF export needs reportlab on the console's Python "
+                    "(pip install reportlab)"
+                )
+        sys.path.insert(0, str(self.workshop))
+        try:
+            if fmt == "pdf":
+                from adapters import sad_pdf
+
+                return (
+                    sad_pdf.render(declaration, self._run_objective(run_id)),
+                    "application/pdf",
+                    f"sad-{run_id}.pdf",
+                )
+            from adapters import sad_xml
+
+            return (
+                sad_xml.render(declaration),
+                "application/xml",
+                f"sad-{run_id}.xml",
+            )
+        finally:
+            sys.path.remove(str(self.workshop))
+
+    def _run_objective(self, run_id: str) -> str:
+        """The objective.md of the run's case (for the FICTIONAL DEMO watermark)."""
+        case_id = self._run_cases().get(run_id)
+        folder = (
+            (self.workshop / "cases" / case_id)
+            if case_id
+            else self.case_dir()
+        )
+        objective = folder / "objective.md"
+        return objective.read_text(errors="replace") if objective.is_file() else ""
 
     def _run_dir(self, run_id: str) -> Path:
         if "/" in run_id or ".." in run_id or not run_id.startswith("run-"):
@@ -764,9 +1018,15 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002
             pass
 
-        def _send(self, status: int, body: bytes, kind: str) -> None:
+        def _send(
+            self, status: int, body: bytes, kind: str, filename: str = ""
+        ) -> None:
             self.send_response(status)
             self.send_header("Content-Type", kind)
+            if filename:
+                self.send_header(
+                    "Content-Disposition", f"attachment; filename={filename}"
+                )
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -809,6 +1069,26 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
                         ),
                         "image/png",
                     )
+                elif (
+                    len(parts) == 4
+                    and parts[:2] == ["api", "runs"]
+                    and parts[3] == "export"
+                ):
+                    fmt = q.get("format", [""])[0]
+                    if fmt not in ("pdf", "xml"):
+                        self._json(
+                            {"error": "format must be pdf or xml"},
+                            HTTPStatus.BAD_REQUEST,
+                        )
+                    else:
+                        try:
+                            body, kind, filename = console.export_run(parts[2], fmt)
+                        except ImportError as error:
+                            self._json(
+                                {"error": str(error)}, HTTPStatus.NOT_IMPLEMENTED
+                            )
+                        else:
+                            self._send(200, body, kind, filename)
                 elif len(parts) == 3 and parts[:2] == ["api", "runs"]:
                     self._json(console.run_detail(parts[2]))
                 else:
@@ -826,6 +1106,8 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
                     self._json(console.set_workshop(b.get("path", "")))
                 elif parts == ["api", "case"]:
                     self._json(console.select_case(str(b.get("case", ""))))
+                elif parts == ["api", "shipments"]:
+                    self._json(console.create_shipment(b.get("name"), b.get("files")))
                 elif parts == ["api", "runs"]:
                     self._json(
                         console.start_run(b.get("turns", 30), bool(b.get("step")))
@@ -880,14 +1162,12 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Agent Console for the legal agent workshop"
-    )
+    parser = argparse.ArgumentParser(description="ClearFirst Broker Console")
     parser.add_argument(
         "--workshop",
         type=Path,
         default=None,
-        help="a different legal-agent-workshop folder (default: the one this ui/ folder is in)",
+        help="a different ClearFirst folder (default: the one this ui/ folder is in)",
     )
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="127.0.0.1")
@@ -898,7 +1178,7 @@ def main() -> None:
     console = Console(workshop)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(console))
     print(
-        f"Agent Console → http://{args.host}:{args.port}"
+        f"ClearFirst → http://{args.host}:{args.port}"
         + (
             f"  (workshop: {console.workshop})"
             if console.workshop

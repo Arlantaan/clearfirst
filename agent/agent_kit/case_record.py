@@ -543,6 +543,9 @@ class CaseRecord:
                 + ", ".join(missing)
                 + "; cite each field or name it in discrepancies or open_questions"
             )
+        estimate = declaration.get("duty_estimate")
+        if estimate is not None and not isinstance(estimate, dict):
+            raise CaseError("duty_estimate must be the compute_duty result object")
         record = dict(declaration, status=status, filed=now(), review=None)
         self.data["declaration"] = record
         self._save("declaration_filed", "agent", {"status": status})

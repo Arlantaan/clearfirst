@@ -24,6 +24,11 @@ def verification_enabled() -> bool:
     return os.environ.get("VERIFICATION", "off").strip().lower() in _TRUE
 
 
+def country_pack() -> str:
+    """The tariff pack (COUNTRY_PACK, default gm): ../tariff/<pack>.json."""
+    return os.environ.get("COUNTRY_PACK", "").strip() or "gm"
+
+
 def case_dir(root: Path) -> Path:
     """The case folder (CASE_DIR, absolute or relative to the agent folder): objective.md and documents/."""
     value = os.environ.get("CASE_DIR", "").strip() or "../cases/gypsum-boards-tr"

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Agent Console</title>
+<title>ClearFirst</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root { --bg:#f5f6f8; --panel:#fff; --ink:#1c1e21; --muted:#65676b; --line:#e4e6eb; --blue:#0866ff; --green:#1a7f37; --green-bg:#e6f4ea;
@@ -22,7 +22,7 @@
   .s-running{background:#e7f0ff;color:var(--blue)} .s-needs_input,.s-escalated{background:var(--amber-bg);color:var(--amber)} .s-awaiting_signoff{background:var(--violet-bg);color:var(--violet)}
   .s-done,.s-proven,.s-approved{background:var(--green-bg);color:var(--green)} .s-answered,.s-unverified{background:#fff4d6;color:#7a5b00} .s-paused,.s-open{background:var(--gray-bg);color:var(--muted)}
   .s-rejected,.s-error{background:var(--red-bg);color:var(--red)}
-  main { display:grid; grid-template-columns:270px minmax(0,1fr) 380px; gap:14px; padding:14px 16px; align-items:start; }
+  main { display:grid; grid-template-columns:280px minmax(0,1fr) 360px; gap:14px; padding:14px 16px; align-items:start; }
   main > aside { position:sticky; top:62px; max-height:calc(100vh - 76px); overflow:auto; }
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
   .panel h2 { font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; gap:6px; }
@@ -37,7 +37,7 @@
   .kv { display:grid; grid-template-columns:130px 1fr; gap:3px 10px; font-size:12.5px; margin:6px 0 10px; } .kv b{color:var(--muted);font-weight:600}
   .steps { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   textarea { width:100%; font:inherit; font-size:13px; padding:6px 8px; border-radius:6px; border:1px solid var(--line); min-height:52px; }
-  #timeline { max-height:calc(100vh - 300px); min-height:240px; overflow:auto; padding-right:4px; }
+  #timeline { max-height:420px; min-height:160px; overflow:auto; padding-right:4px; }
   .tb { border:1px solid var(--line); border-radius:8px; margin-bottom:8px; background:#fff; overflow:hidden; }
   .tb-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:4px 10px; background:#f7f8fa; border-bottom:1px solid var(--line); font-size:12px; cursor:pointer; }
   .tb-head:hover { background:#eef2f7; } .tb-head b { font-size:12.5px; } .tb-head .why { color:var(--blue); white-space:nowrap; }
@@ -117,44 +117,80 @@
   .tool { border-top:1px solid var(--line); padding:6px 0; font-size:12px; } .tool:first-child { border-top:0; } .tool code { font-weight:600; font-size:12.5px; } .tool .muted { margin-top:2px; }
   .saw { font-size:12.5px; } .saw .box { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:6px 0; background:#fafbfc; }
   .saw h3 { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:10px 0 4px; }
+  .tagline { color:#cfd6db; font-size:13px; }
+  #envBadges { color:#cfd6db; }
+  .ship { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; cursor:pointer; }
+  .ship:hover { background:#f2f6fc; } .ship.active { border-color:var(--blue); background:#eef4ff; }
+  .ship-t { font-weight:600; font-size:13px; margin-bottom:4px; }
+  #shipbar input[type=number] { width:56px; padding:5px 6px; border-radius:6px; border:1px solid var(--line); }
+  details.developer > summary { cursor:pointer; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:600; }
+  details.developer .panel { margin-top:14px; }
+  #drop { border:2px dashed var(--line); border-radius:8px; padding:22px; text-align:center; color:var(--muted); margin:10px 0; cursor:pointer; }
+  #drop.over { border-color:var(--blue); background:#f2f6fc; }
+  #newShip label.name { display:block; margin:8px 0; font-size:13px; }
+  #newShip input[type=text] { display:block; width:100%; font:inherit; padding:6px 8px; border-radius:6px; border:1px solid var(--line); margin-top:4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Agent Console</h1>
-  <label class="case-pick" title="The case the agent works on (cases/ folder)">Case <select id="caseSel" onchange="selectCase(this.value)"><option>…</option></select></label>
+  <h1>ClearFirst</h1>
+  <span class="tagline">Declarations that clear first time</span>
   <div class="spacer"></div>
-  <label title="Pause before every turn; click Next turn to continue"><input id="step" type="checkbox"> Step through turns</label>
-  <label>Turns <input id="turns" type="number" min="1" max="200" value="30"></label>
-  <button class="primary" id="startBtn" onclick="startRun()">▶ Start agent</button>
-  <button id="resetBtn" onclick="resetCase()">Reset case</button>
+  <span id="envBadges" class="small"></span>
 </header>
 
 <main>
   <aside>
-    <div class="panel"><h2>Tools Available</h2><div id="tools"><div class="muted small">Loading tools…</div></div></div>
+    <div class="panel"><h2>Shipments</h2><div id="ships"><div class="muted small">Loading…</div></div><button class="primary" style="width:100%;margin-top:8px" onclick="openNewShipment()">+ New shipment</button></div>
   </aside>
 
   <section>
-    <details class="panel assignment" id="briefPanel" open>
+    <div class="panel" id="shipbar">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div id="shipTitle" style="font-size:16px;font-weight:600">…</div><span id="shipStatus" class="badge"></span>
+        <div class="spacer"></div>
+        <button class="primary" id="startBtn" onclick="startRun()">Prepare declaration</button>
+      </div>
+      <details class="small" style="margin-top:8px"><summary class="muted" style="cursor:pointer">Options</summary>
+        <div class="steps" style="margin-top:6px">
+          <label>Turns <input id="turns" type="number" min="1" max="200" value="40"></label>
+          <label><input id="step" type="checkbox"> Step through turns</label>
+          <button id="resetBtn" onclick="resetCase()">Reset case</button>
+        </div>
+      </details>
+    </div>
+    <div class="panel"><h2>Progress</h2><div id="progressStrip"><span class="muted small">—</span></div></div>
+    <details class="panel assignment" id="briefPanel">
       <summary><span class="a-icon">📋</span><span class="a-title">The agent's assignment</span><span class="a-src">read from <code id="objSrc">objective.md</code></span><span class="a-chev">▶</span></summary>
       <div id="brief" class="objective"><div class="muted small">Loading objective…</div></div>
     </details>
-    <div id="cards"></div>
     <div class="panel"><h2>Timeline <span class="small muted" style="text-transform:none;letter-spacing:0">click a turn to see what the model saw</span></h2>
       <div id="stepbar"></div>
       <div id="timeline"><div class="empty">Each turn appears here as Plan → Act → Observe.</div></div></div>
+    <div id="cards"></div>
     <div class="panel" id="runhead"><div class="muted small">No runs yet</div></div>
+    <details class="panel developer" id="devPanel">
+      <summary>Developer</summary>
+      <div class="panel"><h2>Tools available</h2><div id="tools"><div class="muted small">Loading tools…</div></div></div>
+      <div class="panel"><h2>Agent state</h2><div id="stateinfo" class="small muted">—</div><div style="margin-top:6px"><a class="file" onclick="showRaw('state')">Raw state</a><a class="file" onclick="showRaw('case')">Raw case record</a></div></div>
+      <div id="devVerify"></div>
+    </details>
   </section>
 
   <aside>
     <div class="panel"><h2>Checklist <span id="ckcount" class="badge"></span></h2><div id="checklist"><div class="muted small">—</div></div></div>
     <div class="panel"><h2>Signature checks</h2><div id="sigs"><div class="muted small">No signatures checked yet</div></div></div>
     <div class="panel"><h2>Plan</h2><ol id="plan" style="padding-left:18px;margin:0" class="small"><li class="muted">No plan yet</li></ol></div>
-    <div class="panel"><h2>Agent state</h2><div id="stateinfo" class="small muted">—</div><div style="margin-top:6px"><a class="file" onclick="showRaw('state')">Raw state</a><a class="file" onclick="showRaw('case')">Raw case record</a></div></div>
   </aside>
 </main>
 
+<dialog id="newShip">
+  <div style="display:flex;justify-content:space-between;align-items:center"><b>New shipment</b><button onclick="document.getElementById('newShip').close()">Close</button></div>
+  <label class="name">Shipment name<input type="text" id="shipName" placeholder="e.g. steel-pipes-ng"></label>
+  <div id="drop">Drop documents here, or <a class="file" id="pickFiles">choose files</a> (PDF, JPG, PNG)<input type="file" id="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png" hidden></div>
+  <div id="shipFiles"></div>
+  <div class="steps" style="margin-top:10px"><button class="primary" id="createShipBtn" onclick="createShipment()">Create shipment</button></div>
+</dialog>
 <dialog id="dlg"><div style="display:flex;justify-content:space-between;align-items:center"><b id="dlgTitle"></b><button onclick="dlg.close()">Close</button></div><div id="dlgBody"></div></dialog>
 <div class="toast" id="toast"></div>
 
@@ -229,27 +265,28 @@ async function selectCase(id) {
   const current = (info.cases || []).find(c => c.path === info.case);
   const target = (info.cases || []).find(c => c.id === id);
   if (!target || (current && current.id === id)) return;
-  if (!confirm(`Switch to “${target.title}”?\n\nThe inbox is reset to ${target.path}/documents (runs are kept).`)) { renderCases(true); return; }
+  if (!confirm(`Switch to “${target.title}”?\n\nThe inbox is reset to ${target.path}/documents (runs are kept).`)) { renderShips(true); return; }
   try {
     info = await api("/api/case", {case: id});
     selected = null; window._picked = false; window._briefKey = null; window._casesKey = null;
     toast(`Case: ${target.title}`); refreshDocs(); poll();
-  } catch (e) { toast(e.message, true); renderCases(true); }
+  } catch (e) { toast(e.message, true); renderShips(true); }
 }
-function renderCases(force) {
-  const sel = $("caseSel"), cases = info.cases || [];
-  if (!info.cases) { sel.innerHTML = "<option>restart ui.py</option>"; sel.disabled = true; sel.title = "The console server is older than this page: stop it and run python3 ui/ui.py again"; $("objSrc").textContent = "objective.md"; return; }
-  sel.title = "";
+const SHIP_BADGE = {"not started":"s-paused", "running":"s-running", "needs broker":"s-needs_input", "awaiting sign-off":"s-awaiting_signoff", "done":"s-done"};
+function renderShips(force) {
+  const box = $("ships"), cases = info.cases || [];
+  if (!info.cases) { box.innerHTML = '<div class="muted small">Console server is older than this page: stop it and run python3 ui/ui.py again</div>'; $("objSrc").textContent = "objective.md"; return; }
   const key = JSON.stringify([cases, info.case]);
   if (!force && window._casesKey === key) return;
-  if (!force && document.activeElement === sel) return;
   window._casesKey = key;
-  const inList = cases.some(c => c.path === info.case);
-  sel.innerHTML = cases.map(c => `<option value="${esc(c.id)}" ${c.path === info.case ? "selected" : ""}>${esc(c.title)}</option>`).join("")
-    + (inList ? "" : `<option selected disabled>${esc(info.case || "no case")}</option>`);
+  box.innerHTML = cases.map(c => `<div class="ship${c.path === info.case ? " active" : ""}" data-id="${esc(c.id)}"><div class="ship-t">${esc(c.title)}</div><span class="badge ${SHIP_BADGE[c.status] || "s-paused"}">${esc(c.status || "")}</span></div>`).join("") || '<div class="muted small">No shipments yet.</div>';
   $("objSrc").textContent = `${info.case}/objective.md`;
+  const cur = cases.find(c => c.path === info.case);
+  $("shipTitle").textContent = cur ? cur.title : (info.case || "No shipment");
+  const badge = $("shipStatus"), label = cur ? cur.status || "" : "";
+  badge.className = "badge " + (SHIP_BADGE[label] || "s-paused"); badge.textContent = label;
 }
-async function startRun() { try { await api("/api/runs", {turns: +$("turns").value || 30, step: $("step").checked}); autoFollow = "new"; toast("Agent started"); } catch (e) { toast(e.message, true); } }
+async function startRun() { try { await api("/api/runs", {turns: +$("turns").value || 40, step: $("step").checked}); autoFollow = "new"; toast("Preparing the declaration"); } catch (e) { toast(e.message, true); } }
 async function resumeRun(turns = 15) { try { await api(`/api/runs/${selected}/resume`, {turns, step: $("step").checked}); toast("Resuming the same run"); } catch (e) { toast(e.message, true); } }
 function setVerifyBusy(action) { verifyBusy = action ? {action, since: Date.now(), run: selected} : null; window._lastCards = null; renderCards(); }
 async function verifyRun(what) {
@@ -284,6 +321,42 @@ async function answerRequest(requestId) {
   if (!notes.trim()) { toast("Write the reply first", true); return; }
   try { await api(`/api/runs/${selected}/review`, {decision: "answer", notes, request_id: requestId}); toast("Answered; resuming"); await resumeRun(15); } catch (e) { toast(e.message, true); }
 }
+let pendingFiles = [];
+function openNewShipment() { pendingFiles = []; $("shipName").value = ""; renderPending(); $("newShip").showModal(); }
+function renderPending() {
+  $("shipFiles").innerHTML = pendingFiles.map((f, i) => `<div class="small" style="display:flex;justify-content:space-between;gap:8px;padding:3px 0"><span>${esc(f.filename)} <span class="muted">(${(f.bytes / 1024).toFixed(0)} KB)</span></span><a class="file" onclick="pendingFiles.splice(${i},1);renderPending()">remove</a></div>`).join("");
+}
+function addFiles(list) {
+  for (const file of list) {
+    if (!/\.(pdf|jpe?g|png)$/i.test(file.name)) { toast(`${file.name}: only PDF, JPG, PNG`, true); continue; }
+    const rd = new FileReader();
+    rd.onload = () => { pendingFiles.push({filename: file.name, bytes: file.size, data: String(rd.result).split(",", 2)[1]}); renderPending(); };
+    rd.readAsDataURL(file);
+  }
+}
+async function createShipment() {
+  const name = $("shipName").value.trim();
+  if (!name) { toast("Give the shipment a name", true); return; }
+  if (!pendingFiles.length) { toast("Upload at least one document", true); return; }
+  try {
+    $("createShipBtn").disabled = true;
+    info = await api("/api/shipments", {name, files: pendingFiles.map(({filename, data}) => ({filename, data}))});
+    selected = null; window._picked = false; window._briefKey = null; window._casesKey = null;
+    $("newShip").close(); toast(`Shipment created: ${name}`);
+    (info.warnings || []).forEach(w => toast(w, true));
+    refreshDocs(); poll();
+  } catch (e) { toast(e.message, true); }
+  finally { $("createShipBtn").disabled = false; }
+}
+async function exportFile(fmt) {
+  try {
+    const r = await fetch(`/api/runs/${selected}/export?format=${fmt}`);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); toast(j.error || r.statusText, true); return; }
+    const blob = await r.blob();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `${selected}.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) { toast(e.message, true); }
+}
 async function resetCase() { if (!confirm("Reset the inbox to the initial release? (Runs are kept.)")) return; try { await api("/api/reset", {clear_runs:false}); toast("Case reset to the initial release"); refreshDocs(); } catch (e) { toast(e.message, true); } }
 async function nextTurn() { try { await api("/api/control", {next: true}); } catch (e) { toast(e.message, true); } }
 async function runToEnd() { try { await api("/api/control", {step: false}); $("step").checked = false; } catch (e) { toast(e.message, true); } }
@@ -294,7 +367,7 @@ async function loadBrief() {
     $("tools").innerHTML = b.tools.map(t => `<div class="tool"><code>${esc(t.name)}</code><span class="muted">(${esc(t.parameters.join(", "))})</span><div class="muted">${esc(short(t.description, 150))}</div></div>`).join("");
   } catch (e) { $("brief").textContent = e.message; }
 }
-function select(id) { if (!id) return; selected = id; events = []; detail = null; window._open = new Set(); window._tlKey = null; window._lastHead = null; $("timeline").innerHTML = ""; poll(); }
+function select(id) { if (!id) return; selected = id; events = []; detail = null; window._open = new Set(); window._tlKey = null; window._lastHead = null; $("timeline").innerHTML = ""; setHtml($("devVerify"), ""); poll(); }
 
 function renderRuns(runs) { window._runs = runs; }
 
@@ -515,6 +588,13 @@ function declarationHtml(declaration, cs) {
           + `<tr><td></td><td colspan="9"><div class="muted small">HS justification: ${esc(txt(it.hs_justification))}</div>${citeDetails(list)}</td></tr>`;
       }).join("") + `</table>`;
   }
+  const est = declaration.duty_estimate;
+  if (est && typeof est === "object" && asList(est.levies).length) {
+    html += `<div class="small" style="margin:8px 0 2px"><b>Duty estimate</b></div><table class="score">` +
+      `<tr><td>Customs value</td><td>GMD ${esc(txt(est.customs_value_gmd))}</td></tr>` +
+      asList(est.levies).filter(l => l && typeof l === "object").map(l => `<tr><td>${esc(txt(l.name || l.code))} (${esc(txt(l.rate_pct))}%)</td><td>GMD ${esc(txt(l.amount))}</td></tr>`).join("") +
+      `<tr><td><b>Total payable</b></td><td><b>GMD ${esc(txt(est.total_payable_gmd))}</b></td></tr></table>`;
+  }
   const discs = asList(declaration.discrepancies).filter(x => x && typeof x === "object");
   if (discs.length) {
     html += `<div class="small" style="margin:8px 0 2px"><b>Discrepancies</b></div>` +
@@ -559,14 +639,15 @@ function renderCards() {
       <div class="kv" style="margin-top:8px"><b>Checklist</b><span>${esc(checklistSummary(cs))}</span></div>
       ${flags.length ? `<div class="kv" style="margin-top:8px"><b>Flags to confirm</b><span>${flags.map(f => f.kind === "claim" ? `Claim: ${esc(txt(f.reason) || (txt(f.field) + ": " + txt(f.value)))}` : `${esc(f.kind === "excluded" ? "Excluded document" : "Signature")}: ${esc(f.document_id)} — ${esc(short(f.reason, 120))}`).join("<br>")}</span></div>` : ""}
       <textarea id="signoffNotes" placeholder="Notes (required to reject)"></textarea>
-      <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve declaration</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Reject with notes</button></div></div>`;
+      <div class="steps" style="margin-top:6px"><button class="ok" ${busy ? "disabled" : ""} onclick="review('approve')">Approve</button><button class="danger" ${busy ? "disabled" : ""} onclick="review('reject')">Send back</button></div></div>`;
   } else if (declaration && (declaration.status === "approved" || d.status === "done")) {
-    html += `<div class="panel card-green"><h2>Signed-off declaration</h2>${declarationHtml(declaration, cs)}</div>`;
+    html += `<div class="panel card-green"><h2>Signed-off declaration</h2>${declarationHtml(declaration, cs)}<div class="steps" style="margin-top:10px"><span class="small"><b>Export</b></span><button onclick="exportFile(\'pdf\')">SAD PDF</button><button onclick="exportFile(\'xml\')">XML</button></div></div>`;
   } else if (declaration && declaration.status === "unverified") {
     html += `<div class="panel card-yellow"><h2>Declaration</h2>${declarationHtml(declaration, cs)}<div class="small" style="margin-top:6px">Would you sign off on this? Pick one line and find the page that proves it in the checklist.</div></div>`;
   } else if (declaration && declaration.status === "rejected") {
     html += `<div class="panel card-amber"><h2>Declaration rejected · back with the agent</h2><div class="small">${esc((declaration.review || {}).notes)}</div></div>`;
   }
+  let verifyHtml = "";
   if (!d.job && ["answered", "paused", "awaiting_signoff", "done", "needs_input"].includes(d.status) && !(d.state || {}).verification) {
     const results = (d.verification || []).slice().reverse();
     const when = r => r.at ? ` <span class="when">· checked ${esc(time(r.at))}</span>` : "";
@@ -581,12 +662,13 @@ function renderCards() {
       : pending === "checklist" ? "Checking the checklist against the case's ground truth (one Muse Spark call). Usually 10–30 seconds."
       : pending === "branch" ? "Starting a new run from this run's checklist, with verification on. The checklist check runs first, then the new run opens here."
       : "";
-    html += `<div class="panel"><h2>Verify this run</h2><div class="small" style="margin-bottom:6px">Run the verification checks on the work this run already did. The agent is not involved and the run is not changed. <b>Continue from the checklist</b> starts a new run with verification on, from this run's checklist.</div>
+    verifyHtml = `<div class="panel"><h2>Verify this run</h2><div class="small" style="margin-bottom:6px">Run the verification checks on the work this run already did. The agent is not involved and the run is not changed. <b>Continue from the checklist</b> starts a new run with verification on, from this run's checklist.</div>
       <div class="steps">${label("declaration", "Verify the declaration")}${label("checklist", "Verify the checklist")}${label("branch", "Continue from the checklist, verification on", "primary")}</div>
       ${status ? `<div class="vstatus"><div class="spinner"></div><span>${status}</span></div>` : ""}
       ${verifyError && verifyError.run === d.id && !pending ? `<div class="vstatus err">${esc(verifyError.msg)}</div>` : ""}
       ${latest.length ? latest.map(line).join("") : (pending ? "" : `<div class="small muted" style="margin-top:8px">No checks run yet.</div>`)}</div>`;
   }
+  setHtml($("devVerify"), verifyHtml);
   if (d.status === "paused" && !d.job && d.branched_from && !(d.state || {}).turn) html += `<div class="panel card-violet"><h2>Continued from ${esc(d.branched_from)} · verification on</h2><div class="steps"><span class="small">The agent's Session 1 checklist went through the checklist check (see the timeline). Resume to let the agent continue from there.</span><button class="primary" onclick="resumeRun(30)">Resume this run</button></div></div>`;
   else if (d.status === "paused" && !d.job) html += `<div class="panel"><h2>${d.error ? "Paused: the Model API call failed" : "Paused at the turn limit"}</h2><div class="steps"><span class="small">${d.error ? esc(short(d.error, 200)) : "Used all its turns without finishing or escalating."}</span><button onclick="resumeRun(15)">Resume with 15 more turns</button></div></div>`;
   const keep = {}; for (const id of ["signoffNotes", "answerNotes"]) if ($(id)) keep[id] = $(id).value;
@@ -637,6 +719,15 @@ function renderSide() {
   $("stateinfo").innerHTML = Object.entries(st).filter(([k]) => !skip.has(k)).map(([k, v]) => `<div><b>${esc(k)}</b>: ${esc(short(typeof v === "string" ? v : JSON.stringify(v), 150))}</div>`).join("") || "—";
 }
 
+function renderProgress() {
+  const el = $("progressStrip");
+  if (!detail) { setHtml(el, `<span class="muted small">No run yet — press Prepare declaration.</span>`); return; }
+  const st = detail.state || {}, cs = detail.case || {};
+  const declChecks = (cs.declaration_checks || []).filter(c => c.check === "declaration");
+  const checks = (cs.checklist_checks || []).filter(c => c.passed).length + declChecks.filter(c => c.passed).length + (cs.signature_checks || []).length;
+  const metric = (v, label) => `<div class="metric"><b>${v}</b><span>${label}</span></div>`;
+  setHtml(el, `<div class="metrics" style="margin-top:0">` + metric(st.turn ?? 0, "turn") + metric((cs.facts || []).length, "facts") + metric(checks, "checks passed") + metric(declChecks.filter(c => !c.passed).length, "refusals") + metric((cs.flags || []).length, "flags") + `</div>`);
+}
 function renderHead() {
   const d = detail, m = d.metrics, st = d.state || {};
   const running = d.status === "running";
@@ -663,25 +754,36 @@ async function poll() {
     if (!info.workshop) { $("brief").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("tools").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("startBtn").disabled = true; return; }
     const briefKey = info.workshop + ":" + info.case + ":" + info.verification + ":" + info.agent_ready;
     if (window._briefKey !== briefKey) { window._briefKey = briefKey; loadBrief(); }
-    renderCases();
+    renderShips();
+    $("envBadges").textContent = `${info.verification ? "Verification on" : "Verification off"} · ${info.model || ""}${info.api_key_configured ? "" : " · no API key"}`;
     if ($("step").dataset.init !== "1" && info.control) { $("step").checked = !!info.control.step; $("step").dataset.init = "1"; }
     const running = (info.jobs || []).some(j => j.running);
-    $("startBtn").disabled = running || !info.agent_ready; $("resetBtn").disabled = running; $("caseSel").disabled = running || !info.cases;
+    $("startBtn").disabled = running || !info.agent_ready; $("resetBtn").disabled = running;
     const last = (info.jobs || []).slice(-1)[0];
     if (last && last.run_id && last.running && last.run_id !== selected && autoFollow) { autoFollow = null; select(last.run_id); return; }
     if (last && !last.running && last.returncode && !last.run_id && !shownFailures.has(last.id)) { shownFailures.add(last.id); toast(`Agent failed: ${short(last.log, 220)}`, true); }
     const runs = await api("/api/runs"); renderRuns(runs);
-    if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press ▶ Start agent${info.agent_ready ? "" : " (build customs_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
-    if (!selected && runs.length && !window._picked) { window._picked = true; select(runs[0].id); return; }
+    if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press Prepare declaration${info.agent_ready ? "" : " (build customs_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
+    if (!selected && runs.length && !window._picked) { window._picked = true; const cur = (info.cases || []).find(c => c.path === info.case); select((cur && cur.run_id) || runs[0].id); return; }
     if (selected) {
       const d = await api(`/api/runs/${selected}`);
       detail = d;
-      for (const [name, render] of [["timeline", () => setEvents(d.events)], ["run panel", renderHead], ["cards", renderCards], ["sidebar", renderSide]]) {
+      for (const [name, render] of [["timeline", () => setEvents(d.events)], ["run panel", renderHead], ["cards", renderCards], ["sidebar", renderSide], ["progress", renderProgress]]) {
         try { render(); } catch (e) { console.error(`console: ${name} failed to render`, e); }
       }
+    } else {
+      detail = null;
+      setHtml($("cards"), ""); setHtml($("devVerify"), ""); renderProgress();
+      if (window._lastHead !== "") { window._lastHead = ""; $("runhead").innerHTML = '<div class="muted small">No runs yet</div>'; }
     }
   } catch (e) { /* server restarting */ }
 }
+$("drop").addEventListener("click", e => { if (e.target.id !== "fileInput") $("fileInput").click(); });
+$("fileInput").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+$("drop").addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", e => { e.preventDefault(); $("drop").classList.remove("over"); addFiles(e.dataTransfer.files); });
+$("ships").onclick = e => { const el = e.target.closest(".ship"); if (el) selectCase(el.dataset.id); };
 refreshDocs(); poll(); setInterval(poll, 1200); setInterval(refreshDocs, 3000);
 </script>
 </body>

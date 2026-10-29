@@ -1,0 +1,51 @@
+{
+  "country": "GM",
+  "authority": "Gambia Revenue Authority",
+  "currency": "GMD",
+  "source_note": "Rates and levy structure transcribed from a real GRA assessment notice (June 2026) and the ECOWAS Common External Tariff. Figures are for demonstration; a production deployment loads the current tariff schedule from the authority.",
+  "exchange_rates": {
+    "USD": 71.83,
+    "EUR": 77.90,
+    "CNY": 9.92,
+    "TRY": 2.10,
+    "GBP": 91.40,
+    "as_of": "2026-06-20"
+  },
+  "levies": [
+    {"code": "IDF", "name": "Import duty", "basis": "customs_value", "rate_source": "hs_schedule"},
+    {"code": "PRF", "name": "Processing fee", "basis": "customs_value", "rate_pct": 1.5},
+    {"code": "AUL", "name": "African Union levy", "basis": "customs_value", "rate_pct": 0.2},
+    {"code": "ECL", "name": "ECOWAS levy", "basis": "customs_value", "rate_pct": 0.5},
+    {"code": "GNSW", "name": "Gambia National Single Window fee", "basis": "customs_value", "rate_pct": 1.0},
+    {"code": "VAT", "name": "Value added tax", "basis": "customs_value_plus_duty", "rate_source": "hs_schedule"}
+  ],
+  "hs_schedule": [
+    {"hs": "6809.19", "description": "Boards, sheets, panels, tiles and similar articles of plaster, other than faced or reinforced with paper or paperboard only", "duty_pct": 0.0, "vat_pct": 0.0, "cet_band": "exempt (building materials relief)"},
+    {"hs": "6809.11", "description": "Boards, sheets, panels, tiles and similar articles of plaster, faced or reinforced with paper or paperboard only", "duty_pct": 0.0, "vat_pct": 0.0, "cet_band": "exempt (building materials relief)"},
+    {"hs": "6907.21", "description": "Ceramic flags and paving, hearth or wall tiles, glazed, of a water absorption coefficient by weight not exceeding 0.5% (porcelain)", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4 - final consumer goods"},
+    {"hs": "6907.22", "description": "Ceramic tiles, water absorption exceeding 0.5% but not exceeding 10%", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4 - final consumer goods"},
+    {"hs": "6907.23", "description": "Ceramic tiles, water absorption exceeding 10%", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4 - final consumer goods"},
+    {"hs": "2523.29", "description": "Portland cement, other than white cement", "duty_pct": 10.0, "vat_pct": 15.0, "cet_band": "2 - raw materials and capital goods"},
+    {"hs": "7214.20", "description": "Bars and rods of iron or non-alloy steel, containing indentations, ribs, grooves (reinforcing bars)", "duty_pct": 10.0, "vat_pct": 15.0, "cet_band": "2"},
+    {"hs": "1006.30", "description": "Semi-milled or wholly milled rice", "duty_pct": 10.0, "vat_pct": 0.0, "cet_band": "2 (VAT exempt staple)"},
+    {"hs": "1701.99", "description": "Cane or beet sugar, other", "duty_pct": 10.0, "vat_pct": 0.0, "cet_band": "2 (VAT exempt staple)"},
+    {"hs": "1507.90", "description": "Soya-bean oil, refined", "duty_pct": 10.0, "vat_pct": 15.0, "cet_band": "2"},
+    {"hs": "8703.23", "description": "Motor cars, spark-ignition, cylinder capacity 1,500-3,000 cc", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"},
+    {"hs": "8711.20", "description": "Motorcycles, 50-250 cc", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"},
+    {"hs": "6309.00", "description": "Worn clothing and other worn articles", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"},
+    {"hs": "8517.13", "description": "Smartphones", "duty_pct": 10.0, "vat_pct": 15.0, "cet_band": "3 - intermediate goods"},
+    {"hs": "8471.30", "description": "Portable automatic data processing machines (laptops)", "duty_pct": 5.0, "vat_pct": 15.0, "cet_band": "1 - capital goods"},
+    {"hs": "3004.90", "description": "Medicaments, other, put up in measured doses", "duty_pct": 0.0, "vat_pct": 0.0, "cet_band": "0 - essential social goods"},
+    {"hs": "2710.19", "description": "Petroleum oils, other than crude (diesel, kerosene)", "duty_pct": 10.0, "vat_pct": 15.0, "cet_band": "2"},
+    {"hs": "4011.10", "description": "New pneumatic tyres of rubber, for motor cars", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"},
+    {"hs": "9403.60", "description": "Wooden furniture, other", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"},
+    {"hs": "3923.21", "description": "Sacks and bags of polymers of ethylene", "duty_pct": 20.0, "vat_pct": 15.0, "cet_band": "4"}
+  ],
+  "worked_example": {
+    "note": "Gypsum plasterboard, HS 6809.19.00, USD 21,000 CIF at 71.83: customs value GMD 1,508,430.00; import duty 0; processing fee 22,626.45; AU levy 3,016.86; ECOWAS levy 7,542.15; GNSW 15,084.30; VAT 0; total GMD 48,269.76 (the real notice showed 48,272 with rounding per line).",
+    "hs": "6809.19.00",
+    "invoice_total_usd": 21000.0,
+    "customs_value_gmd": 1508430.00,
+    "total_payable_gmd": 48269.76
+  }
+}

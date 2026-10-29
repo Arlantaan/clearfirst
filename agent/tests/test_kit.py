@@ -4,9 +4,11 @@ the start and must keep passing."""
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from agent_kit import case_record, document_text, tools
@@ -229,7 +231,8 @@ class KitTest(unittest.TestCase):
         )
         names = [t["name"] for t in tools.definitions(self.root, verified)]
         self.assertEqual(
-            ["flag_excluded", "request_evidence", "check_signatures"], names[6:]
+            ["flag_excluded", "request_evidence", "check_signatures"],
+            names[len(tools.BASE_TOOLS) :],
         )
 
     def test_a_filed_declaration_ends_the_run_without_verification(self) -> None:
@@ -266,6 +269,25 @@ class KitTest(unittest.TestCase):
         self.assertEqual("BL123456", header["transport"]["bl_number"])
         self.assertEqual(10000, header["valuation"]["invoice_total"])
         self.assertIn("importer.tin", header["citations"])
+
+    def test_filed_declaration_stores_the_duty_estimate(self) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        args = support.cited_declaration()
+        args["duty_estimate"] = {
+            "customs_value_gmd": 100.0,
+            "total_payable_gmd": 10.0,
+        }
+        record = case.file_declaration(args, "unverified")
+        self.assertEqual(100.0, record["duty_estimate"]["customs_value_gmd"])
+
+    def test_filed_declaration_refuses_a_non_object_duty_estimate(self) -> None:
+        self.read(["DOC-MINUTES"])
+        case = self.case()
+        args = support.cited_declaration()
+        args["duty_estimate"] = "GMD 10"
+        with self.assertRaisesRegex(CaseError, "duty_estimate must be"):
+            case.file_declaration(args, "unverified")
 
     def test_broker_declared_fields_take_no_citation(self) -> None:
         self.read(["DOC-MINUTES"])
@@ -489,6 +511,85 @@ class KitTest(unittest.TestCase):
             self.ctx(), {"item": "not_ready", "need": "x"}
         )
         self.assertIn("already proven", result["feedback"])
+
+
+class TariffToolsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root, tmp = support.make_root()
+        self.addCleanup(tmp.cleanup)
+        self.fake = support.scripted(self.root, [])
+        self.client = self.fake.client
+        self.run_id = new_run(
+            self.root, instructions="i", objective="o", verification=False
+        )
+        self._tariff_dir = os.environ.get("TARIFF_DIR")
+        os.environ["TARIFF_DIR"] = str(
+            Path(support.__file__).resolve().parents[2] / "tariff"
+        )
+
+    def tearDown(self) -> None:
+        if self._tariff_dir is None:
+            os.environ.pop("TARIFF_DIR", None)
+        else:
+            os.environ["TARIFF_DIR"] = self._tariff_dir
+
+    def test_lookup_tariff_finds_the_schedule_line(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call("lookup_tariff", {"hs_code": "6907.21.00"}),
+        )
+        self.assertEqual(
+            ("6907.21", 20.0, 15.0),
+            (result["hs"], result["duty_pct"], result["vat_pct"]),
+        )
+        self.assertIn("porcelain", result["description"])
+
+    def test_lookup_tariff_offers_nearest_headings_when_missing(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call("lookup_tariff", {"hs_code": "9999.99"}),
+        )
+        self.assertEqual("not in pack", result["message"])
+        self.assertEqual(3, len(result["nearest"]))
+        self.assertEqual("9403.60", result["nearest"][0]["hs"])
+
+    def test_compute_duty_matches_the_worked_example(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {
+                    "currency": "USD",
+                    "invoice_total": 21000,
+                    "hs_code": "6809.19.00",
+                },
+            ),
+        )
+        self.assertEqual(1508430.00, result["customs_value_gmd"])
+        self.assertAlmostEqual(48269.76, result["total_payable_gmd"], delta=1)
+        self.assertEqual(
+            ["IDF", "PRF", "AUL", "ECL", "GNSW", "VAT"],
+            [levy["code"] for levy in result["levies"]],
+        )
+        self.assertEqual(71.83, result["rates_used"]["exchange_rate"])
+
+    def test_compute_duty_refuses_an_unknown_currency(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {"currency": "XXX", "invoice_total": 100, "hs_code": "6809.19.00"},
+            ),
+        )
+        self.assertIn("no XXX rate", result["error"])
 
 
 if __name__ == "__main__":
