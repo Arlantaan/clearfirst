@@ -43,7 +43,7 @@ def main() -> None:
         else:
             if args.reject and not args.notes:
                 parser.error("--reject needs --notes saying what to fix")
-            result = case.review_memo(args.approve, args.notes)
+            result = case.review_declaration(args.approve, args.notes)
     except CaseError as error:
         parser.error(str(error))
     print(

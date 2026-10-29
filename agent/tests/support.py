@@ -20,8 +20,8 @@ INITIAL = {
     "DOC-MINUTES": [
         "Steering minutes. Mr. Lindgren confirmed the system is ready for go-live. Erik Lindgren, Engagement Partner."
     ],
-    "DOC-MEMO": [
-        "PRIVILEGED AND CONFIDENTIAL. Attorney work product for the review team."
+    "DOC-DECLARATION": [
+        "EXCLUDED AND CONFIDENTIAL. Broker work product for the review team."
     ],
     "DOC-REF": ["Test strategy approval page signed by Dana Okafor, Test Manager."],
 }
@@ -54,9 +54,9 @@ GROUND_TRUTH = [
 
 
 def instructions_file() -> str:
-    """legal_agent/system_instructions.md: the agent must send it unchanged as its instructions."""
+    """customs_agent/system_instructions.md: the agent must send it unchanged as its instructions."""
     return (
-        Path(__file__).absolute().parents[1] / "legal_agent/system_instructions.md"
+        Path(__file__).absolute().parents[1] / "customs_agent/system_instructions.md"
     ).read_text()
 
 
@@ -89,7 +89,7 @@ PLAN = (
         "plan": [
             "Read every document",
             "Record evidence per checklist item",
-            "File the memo",
+            "File the declaration",
         ]
     },
 )
@@ -111,8 +111,8 @@ FACT = (
         "claim": "the vendor said it was ready",
     },
 )
-MEMO = (
-    "submit_memo",
+DECLARATION = (
+    "submit_declaration",
     {
         "conclusion": "Probably yes.",
         "findings": [

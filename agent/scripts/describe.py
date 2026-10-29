@@ -64,9 +64,9 @@ def main() -> None:
                 "built": {
                     path: built(ROOT / path)
                     for path in (
-                        "legal_agent/loop.py",
+                        "customs_agent/loop.py",
                         "verification/verify_checklist.py",
-                        "verification/verify_memo.py",
+                        "verification/verify_declaration.py",
                     )
                 },
                 "documents": len([p for p in inbox.glob("*") if p.is_file()])

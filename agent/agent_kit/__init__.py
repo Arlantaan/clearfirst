@@ -1,4 +1,4 @@
-"""Shared plumbing for the legal agent. Use it; do not edit it.
+"""Shared plumbing for the customs agent. Use it; do not edit it.
 
 - client:        the Meta Model API client: the OpenAI Python SDK, pointed at api.meta.ai.
 - progress:      a run on disk (new_run, save_progress, load_progress), resume after a

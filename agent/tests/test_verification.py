@@ -1,6 +1,6 @@
 """The verification layer (VERIFICATION=on): the checks you build in agent/verification/
-(verify_checklist.py, verify_memo.py), and the tools running them inside a real run of the agent loop,
-with escalation, resume, attorney sign-off, ./helper verify, and continuing from a checklist."""
+(verify_checklist.py, verify_declaration.py), and the tools running them inside a real run of the agent loop,
+with escalation, resume, broker sign-off, ./helper verify, and continuing from a checklist."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ READ_ALL = (
     {"document_ids": ALL_INITIAL, "request": "readiness, statements, signatures"},
 )
 FLAG = (
-    "flag_privileged",
-    {"document_id": "DOC-MEMO", "reason": "attorney work product"},
+    "flag_excluded",
+    {"document_id": "DOC-DECLARATION", "reason": "broker work product"},
 )
 FACTS = [
     (
@@ -124,8 +124,8 @@ def cite(item, doc, quote):
     }
 
 
-GOOD_MEMO = (
-    "submit_memo",
+GOOD_DECLARATION = (
+    "submit_declaration",
     {
         "conclusion": "Yes.",
         "gaps": "None.",
@@ -147,8 +147,8 @@ GOOD_MEMO = (
         ],
     },
 )
-EARLY_MEMO = (
-    "submit_memo",
+EARLY_DECLARATION = (
+    "submit_declaration",
     {
         "conclusion": "Yes.",
         "gaps": "",
@@ -218,11 +218,11 @@ class ChecklistCheckTest(unittest.TestCase):
 
 
 @SKIP
-class MemoRulesTest(unittest.TestCase):
-    """verification/verify_memo.py: the memo rules."""
+class DeclarationRulesTest(unittest.TestCase):
+    """verification/verify_declaration.py: the declaration rules."""
 
     def setUp(self) -> None:
-        from verification import verify_memo
+        from verification import verify_declaration
 
         self.root, tmp = support.make_root()
         self.addCleanup(tmp.cleanup)
@@ -230,10 +230,10 @@ class MemoRulesTest(unittest.TestCase):
         self.ctx = context(self.root, self.fake.client)
         self.case = self.ctx.case
         self.case.set_checklist(support.CHECKLIST_ITEMS)
-        self.verify = verify_memo.run_verification
+        self.verify = verify_declaration.run_verification
 
-    def problems(self, memo: dict) -> list:
-        result = self.verify(self.ctx, memo)
+    def problems(self, declaration: dict) -> list:
+        result = self.verify(self.ctx, declaration)
         self.assertEqual(not result["feedback"], result["passed"])
         return result["feedback"]
 
@@ -243,7 +243,7 @@ class MemoRulesTest(unittest.TestCase):
         analyze(self.fake.client, self.root, ids, "x")
 
     def test_unsettled_items_and_unmatched_citations_are_problems(self) -> None:
-        found = self.problems(EARLY_MEMO[1])
+        found = self.problems(EARLY_DECLARATION[1])
         self.assertTrue(any("neither proven nor escalated" in p for p in found))
         self.assertTrue(any("no matching recorded fact" in p for p in found))
         self.assertTrue(any("no finding for not_ready" in p for p in found))
@@ -256,9 +256,9 @@ class MemoRulesTest(unittest.TestCase):
         return {"findings": [cite("signatures", "DOC-CERT", quote)]}
 
     def test_signature_items_need_a_signature_check_on_a_cited_document(self) -> None:
-        memo = self.signature_finding()
+        declaration = self.signature_finding()
         self.assertTrue(
-            any("no cited document was checked" in p for p in self.problems(memo))
+            any("no cited document was checked" in p for p in self.problems(declaration))
         )
         self.case.add_signature_check(
             {
@@ -269,11 +269,11 @@ class MemoRulesTest(unittest.TestCase):
             }
         )
         self.assertTrue(
-            any("no cited document was checked" in p for p in self.problems(memo))
+            any("no cited document was checked" in p for p in self.problems(declaration))
         )
 
     def test_a_proven_item_cannot_rest_on_an_inconsistent_signature(self) -> None:
-        memo = self.signature_finding()
+        declaration = self.signature_finding()
         self.case.add_signature_check(
             {
                 "document_id": "DOC-CERT",
@@ -283,25 +283,25 @@ class MemoRulesTest(unittest.TestCase):
                 "reason": "different hand",
             }
         )
-        found = self.problems(memo)
+        found = self.problems(declaration)
         self.assertTrue(
             any("DOC-CERT p1 is inconsistent" in p and "not proven" in p for p in found)
         )
         self.assertEqual("signature", self.case.data["flags"][0]["kind"])
 
     def test_confidential_documents_are_never_cited(self) -> None:
-        self.read(["DOC-MEMO"])
-        self.case.flag_privileged("DOC-MEMO", "work product")
-        memo = {
+        self.read(["DOC-DECLARATION"])
+        self.case.flag_excluded("DOC-DECLARATION", "work product")
+        declaration = {
             "findings": [
                 cite(
                     "counterevidence",
-                    "DOC-MEMO",
-                    "Attorney work product for the review team",
+                    "DOC-DECLARATION",
+                    "Broker work product for the review team",
                 )
             ]
         }
-        self.assertTrue(any("confidential" in p for p in self.problems(memo)))
+        self.assertTrue(any("confidential" in p for p in self.problems(declaration)))
 
     def test_an_open_request_is_a_problem(self) -> None:
         self.case.open_request(
@@ -311,7 +311,7 @@ class MemoRulesTest(unittest.TestCase):
             any("request is still open" in p for p in self.problems({"findings": []}))
         )
 
-    def test_a_good_memo_has_no_problems(self) -> None:
+    def test_a_good_declaration_has_no_problems(self) -> None:
         self.read(ALL_INITIAL)
         support.release(self.root)
         self.read(["DOC-DRAFT", "DOC-CERT"])
@@ -332,7 +332,7 @@ class MemoRulesTest(unittest.TestCase):
                 "verdict": "consistent",
             }
         )
-        self.assertEqual([], self.problems(GOOD_MEMO[1]))
+        self.assertEqual([], self.problems(GOOD_DECLARATION[1]))
 
 
 @SKIP
@@ -340,14 +340,14 @@ class VerifiedRunTest(unittest.TestCase):
     """The tools running the checks inside a real run of the agent loop."""
 
     def setUp(self) -> None:
-        from legal_agent.loop import resume_run, run_agent
+        from customs_agent.loop import resume_run, run_agent
 
         self.run_agent, self.resume_run = run_agent, resume_run
         self.root, tmp = support.make_root()
         self.addCleanup(tmp.cleanup)
 
     def initial(self) -> list:
-        return [support.CHECKLIST, READ_ALL, FLAG, *FACTS, EARLY_MEMO, ASK]
+        return [support.CHECKLIST, READ_ALL, FLAG, *FACTS, EARLY_DECLARATION, ASK]
 
     def tool_results(self, run_id: str, name: str) -> list:
         return [
@@ -359,7 +359,7 @@ class VerifiedRunTest(unittest.TestCase):
         self.run_agent(root=self.root, client=fake.client, turns=1)
         offered = {t["name"] for t in support.first_agent_request(fake)["tools"]}
         self.assertTrue(
-            {"flag_privileged", "request_evidence", "check_signatures"} <= offered
+            {"flag_excluded", "request_evidence", "check_signatures"} <= offered
         )
 
     def test_an_incomplete_checklist_gets_feedback_not_the_ground_truth(self) -> None:
@@ -388,18 +388,18 @@ class VerifiedRunTest(unittest.TestCase):
             (False, True, 3), (last["passed"], last["accepted"], last["attempt"])
         )
 
-    def test_early_memo_is_refused_and_missing_evidence_escalates(self) -> None:
+    def test_early_declaration_is_refused_and_missing_evidence_escalates(self) -> None:
         fake = support.scripted(self.root, self.initial())
         result = self.run_agent(root=self.root, client=fake.client, turns=20)
         self.assertEqual("needs_input", result["status"])
-        refused = self.tool_results(result["run_id"], "submit_memo")[0]
-        self.assertEqual("memo", refused["check"])
+        refused = self.tool_results(result["run_id"], "submit_declaration")[0]
+        self.assertEqual("declaration", refused["check"])
         case = support.case(self.root, result["run_id"])
         self.assertEqual(
             ("timing", "missing_evidence"),
             (case["requests"][0]["item"], case["requests"][0]["rule"]),
         )
-        self.assertIsNone(case["memo"])
+        self.assertIsNone(case["declaration"])
 
     def test_escalating_before_reading_everything_is_refused(self) -> None:
         fake = support.scripted(self.root, [support.CHECKLIST, ASK])
@@ -420,8 +420,8 @@ class VerifiedRunTest(unittest.TestCase):
         self.assertIn("nothing new", resumed["note"])
         self.assertEqual(before, len(fake.calls))
 
-    def test_release_resume_verified_memo_then_signoff(self) -> None:
-        fake = support.scripted(self.root, self.initial() + AFTER_RELEASE + [GOOD_MEMO])
+    def test_release_resume_verified_declaration_then_signoff(self) -> None:
+        fake = support.scripted(self.root, self.initial() + AFTER_RELEASE + [GOOD_DECLARATION])
         result = self.run_agent(root=self.root, client=fake.client, turns=20)
         support.release(self.root)
         resumed = self.resume_run(
@@ -436,12 +436,12 @@ class VerifiedRunTest(unittest.TestCase):
             "Released documents: DOC-CERT, DOC-DRAFT", json.dumps(first_after["input"])
         )
         case = CaseRecord(self.root, result["run_id"])
-        self.assertEqual("awaiting_signoff", case.data["memo"]["status"])
+        self.assertEqual("awaiting_signoff", case.data["declaration"]["status"])
         self.assertEqual(
-            ["memo", "memo", "claims"], [c["check"] for c in case.data["memo_checks"]]
+            ["declaration", "declaration", "claims"], [c["check"] for c in case.data["declaration_checks"]]
         )
         self.assertEqual("consistent", case.data["signature_checks"][0]["verdict"])
-        case.review_memo(True, "approved")
+        case.review_declaration(True, "approved")
         done = self.resume_run(
             root=self.root, run_id=result["run_id"], client=fake.client, turns=5
         )
@@ -450,16 +450,16 @@ class VerifiedRunTest(unittest.TestCase):
             "done", support.progress(self.root, result["run_id"])["status"]
         )
 
-    def test_a_rejected_memo_goes_back_to_the_agent(self) -> None:
+    def test_a_rejected_declaration_goes_back_to_the_agent(self) -> None:
         fake = support.scripted(
-            self.root, self.initial() + AFTER_RELEASE + [GOOD_MEMO, GOOD_MEMO]
+            self.root, self.initial() + AFTER_RELEASE + [GOOD_DECLARATION, GOOD_DECLARATION]
         )
         result = self.run_agent(root=self.root, client=fake.client, turns=20)
         support.release(self.root)
         self.resume_run(
             root=self.root, run_id=result["run_id"], client=fake.client, turns=10
         )
-        CaseRecord(self.root, result["run_id"]).review_memo(
+        CaseRecord(self.root, result["run_id"]).review_declaration(
             False, "Explain the counterevidence more fully."
         )
         again = self.resume_run(
@@ -468,10 +468,10 @@ class VerifiedRunTest(unittest.TestCase):
         self.assertEqual("awaiting_signoff", again["status"])
         self.assertIn("rejected", str(support.agent_requests(fake)[-1]["input"]))
 
-    def test_unsupported_claims_refuse_the_memo(self) -> None:
+    def test_unsupported_claims_refuse_the_declaration(self) -> None:
         fake = support.scripted(
             self.root,
-            self.initial() + AFTER_RELEASE + [GOOD_MEMO],
+            self.initial() + AFTER_RELEASE + [GOOD_DECLARATION],
             unsupported=lambda text: [
                 {"item": "timing", "reason": "the quote gives no date"}
             ],
@@ -481,23 +481,23 @@ class VerifiedRunTest(unittest.TestCase):
         resumed = self.resume_run(
             root=self.root, run_id=result["run_id"], client=fake.client, turns=10
         )
-        refused = self.tool_results(result["run_id"], "submit_memo")[-1]
+        refused = self.tool_results(result["run_id"], "submit_declaration")[-1]
         self.assertEqual("claims", refused["check"])
         self.assertNotEqual("awaiting_signoff", resumed["status"])
 
-    def test_three_refused_memos_escalate_to_a_person(self) -> None:
+    def test_three_refused_declarations_escalate_to_a_person(self) -> None:
         fake = support.scripted(
-            self.root, [support.CHECKLIST, READ_ALL, EARLY_MEMO, EARLY_MEMO, EARLY_MEMO]
+            self.root, [support.CHECKLIST, READ_ALL, EARLY_DECLARATION, EARLY_DECLARATION, EARLY_DECLARATION]
         )
         result = self.run_agent(root=self.root, client=fake.client, turns=10)
         self.assertEqual(("needs_input", 5), (result["status"], result["turn"]))
         self.assertEqual(
-            "memo_refused",
+            "declaration_refused",
             support.case(self.root, result["run_id"])["requests"][0]["rule"],
         )
 
     def test_a_flagged_document_cannot_be_read_again(self) -> None:
-        reread = ("analyze_document", {"document_ids": ["DOC-MEMO"], "request": "x"})
+        reread = ("analyze_document", {"document_ids": ["DOC-DECLARATION"], "request": "x"})
         fake = support.scripted(self.root, [support.CHECKLIST, READ_ALL, FLAG, reread])
         result = self.run_agent(root=self.root, client=fake.client, turns=4)
         self.assertIn(
@@ -511,18 +511,18 @@ class ContinueFromSessionOneTest(unittest.TestCase):
     """./helper verify on a finished Session 1 run, then ./helper branch from its checklist."""
 
     def setUp(self) -> None:
-        from legal_agent.loop import resume_run, run_agent
+        from customs_agent.loop import resume_run, run_agent
 
         self.run_agent, self.resume_run = run_agent, resume_run
         self.root, tmp = support.make_root()
         self.addCleanup(tmp.cleanup)
 
-    def test_verify_finds_the_memo_and_checklist_problems(self) -> None:
+    def test_verify_finds_the_declaration_and_checklist_problems(self) -> None:
         run_id = self._session_one()
         fake = support.scripted(self.root, [])
-        memo = verify.verify_memo(verify.context(fake.client, self.root, run_id))
-        self.assertFalse(memo["passed"])
-        self.assertTrue(any("no finding" in p for p in memo["rules"]))
+        declaration = verify.verify_declaration(verify.context(fake.client, self.root, run_id))
+        self.assertFalse(declaration["passed"])
+        self.assertTrue(any("no finding" in p for p in declaration["rules"]))
         checklist = verify.verify_checklist(
             verify.context(fake.client, self.root, run_id)
         )
@@ -568,7 +568,7 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         try:
             fake = support.scripted(
                 self.root,
-                [support.PARTIAL_CHECKLIST, READ_ALL, FACTS[0], FACTS[1], EARLY_MEMO],
+                [support.PARTIAL_CHECKLIST, READ_ALL, FACTS[0], FACTS[1], EARLY_DECLARATION],
             )
             result = self.run_agent(root=self.root, client=fake.client, turns=10)
         finally:

@@ -36,7 +36,7 @@ case "$COMMAND" in
     ;;
   run)
     load_env
-    "$PYTHON" -m legal_agent "$@"
+    "$PYTHON" -m customs_agent "$@"
     ;;
   review)
     "$PYTHON" scripts/review.py "$@"
@@ -65,7 +65,7 @@ Usage: ./helper COMMAND
   setup                                  create .venv, copy the case's documents, check MODEL_API_KEY
   test [--verification]                  offline tests (no API calls)
   run [--turns N] [--resume RUN_ID]      run the agent, or continue a run
-  verify RUN_ID --memo | --checklist     run the verification checks on a finished run
+  verify RUN_ID --declaration | --checklist     run the verification checks on a finished run
   branch RUN_ID                          continue a run from its checklist with verification on
   review RUN_ID --approve | --reject --notes "..." | --answer R1 --notes "..."
   reset [--clear-runs]                   reset the inbox to the case's documents

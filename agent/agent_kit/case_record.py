@@ -2,8 +2,8 @@
 
 One JSON record per run at workspace/case_records/<run-id>.json, written only
 through this module and append-audited. The agent changes it through tools
-(set_checklist, record_fact, flag_privileged, request_evidence, submit_memo); people change
-it through ./helper review (answer a request, approve or reject the memo).
+(set_checklist, record_fact, flag_excluded, request_evidence, submit_declaration); people change
+it through ./helper review (answer a request, approve or reject the declaration).
 """
 
 from __future__ import annotations
@@ -47,14 +47,14 @@ class CaseRecord:
                 "created": now(),
                 "checklist": {},
                 "checklist_checks": [],
-                "memo_checks": [],
+                "declaration_checks": [],
                 "read_ids": [],
                 "facts": [],
                 "rejected_facts": [],
                 "flags": [],
                 "signature_checks": [],
                 "requests": [],
-                "memo": None,
+                "declaration": None,
                 "audit": [],
             }
             self._save("created", "runtime", {})
@@ -79,7 +79,7 @@ class CaseRecord:
 
     def flagged(self, document_id: str) -> bool:
         return any(
-            flag["document_id"] == document_id and flag["kind"] == "privileged"
+            flag["document_id"] == document_id and flag["kind"] == "excluded"
             for flag in self.data["flags"]
         )
 
@@ -161,22 +161,22 @@ class CaseRecord:
         )
         return record
 
-    def record_memo_check(self, check: str, problems: list) -> dict:
-        """Store the outcome of a memo check (memo rules or claims) for one submitted memo."""
+    def record_declaration_check(self, check: str, problems: list) -> dict:
+        """Store the outcome of a declaration check (declaration rules or claims) for one submitted declaration."""
         record = {
             "check": check,
             "passed": not problems,
             "problems": problems,
             "at": now(),
         }
-        self.data.setdefault("memo_checks", []).append(record)
+        self.data.setdefault("declaration_checks", []).append(record)
         self._save(
-            "memo_checked", "verification", {"check": check, "passed": not problems}
+            "declaration_checked", "verification", {"check": check, "passed": not problems}
         )
         return record
 
-    def memo_refusals(self) -> int:
-        return sum(1 for c in self.data.get("memo_checks", []) if not c["passed"])
+    def declaration_refusals(self) -> int:
+        return sum(1 for c in self.data.get("declaration_checks", []) if not c["passed"])
 
     def mark_read(self, document_ids: list) -> None:
         """Remember which documents the agent has read (the escalation rule needs it)."""
@@ -201,7 +201,7 @@ class CaseRecord:
             )
         else:
             next_step = (
-                "Every item is proven or escalated: file the memo now. Add another fact "
+                "Every item is proven or escalated: file the declaration now. Add another fact "
                 f"only if one could be disputed (at most {MAX_FACTS_PER_ITEM} per item)."
             )
         return {
@@ -285,16 +285,16 @@ class CaseRecord:
         )
         return dict(fact, progress=self.progress())
 
-    def flag_privileged(self, document_id: str, reason: str) -> dict:
+    def flag_excluded(self, document_id: str, reason: str) -> dict:
         document_text.get_document(self.root, document_id)
         if self.flagged(document_id):
             return next(
                 f
                 for f in self.data["flags"]
-                if f["document_id"] == document_id and f["kind"] == "privileged"
+                if f["document_id"] == document_id and f["kind"] == "excluded"
             )
         flag = {
-            "kind": "privileged",
+            "kind": "excluded",
             "document_id": document_id,
             "reason": str(reason),
             "review": "pending",
@@ -377,9 +377,9 @@ class CaseRecord:
     def open_requests(self) -> list:
         return [r for r in self.data["requests"] if r["status"] == "open"]
 
-    def file_memo(self, memo: dict, status: str) -> dict:
-        """File the memo. Refused if a finding cites more than MAX_CITATIONS_PER_FINDING facts."""
-        for finding in memo.get("findings") or []:
+    def file_declaration(self, declaration: dict, status: str) -> dict:
+        """File the declaration. Refused if a finding cites more than MAX_CITATIONS_PER_FINDING facts."""
+        for finding in declaration.get("findings") or []:
             citations = finding.get("citations") if isinstance(finding, dict) else None
             if (
                 isinstance(citations, list)
@@ -389,9 +389,9 @@ class CaseRecord:
                     f"the finding for {finding.get('item')} cites {len(citations)} facts; "
                     f"cite its {MAX_CITATIONS_PER_FINDING} strongest at most"
                 )
-        record = dict(memo, status=status, filed=now(), review=None)
-        self.data["memo"] = record
-        self._save("memo_filed", "agent", {"status": status})
+        record = dict(declaration, status=status, filed=now(), review=None)
+        self.data["declaration"] = record
+        self._save("declaration_filed", "agent", {"status": status})
         return record
 
     # ---- people ----
@@ -405,24 +405,24 @@ class CaseRecord:
                 return request
         raise CaseError(f"no request {request_id}")
 
-    def review_memo(
+    def review_declaration(
         self, approve: bool, notes: str = "", flag_decisions: dict | None = None
     ) -> dict:
-        memo = self.data.get("memo")
-        if not memo:
-            raise CaseError("no memo has been filed")
-        memo["review"] = {
+        declaration = self.data.get("declaration")
+        if not declaration:
+            raise CaseError("no declaration has been filed")
+        declaration["review"] = {
             "decision": "approved" if approve else "rejected",
             "notes": notes,
             "at": now(),
         }
-        memo["status"] = "approved" if approve else "rejected"
+        declaration["status"] = "approved" if approve else "rejected"
         for flag in self.data["flags"]:
             flag["review"] = (flag_decisions or {}).get(
                 flag["document_id"], "confirmed" if approve else flag["review"]
             )
-        self._save("memo_reviewed", "human", {"decision": memo["status"]})
-        return memo
+        self._save("declaration_reviewed", "human", {"decision": declaration["status"]})
+        return declaration
 
     # ---- reads ----
     def summary(self) -> dict:
@@ -441,5 +441,5 @@ class CaseRecord:
                 for f in self.data["flags"]
             ],
             "open_requests": [r["id"] for r in self.open_requests()],
-            "memo": (self.data["memo"] or {}).get("status"),
+            "declaration": (self.data["declaration"] or {}).get("status"),
         }

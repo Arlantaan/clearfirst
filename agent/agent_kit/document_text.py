@@ -1,6 +1,6 @@
 """Each document's text, the source of truth for every quote: the inbox, page images, and
 text extraction through the Files API. Used by analyze_document, the case record, and the
-memo rules.
+declaration rules.
 
 Each document's text is extracted once (uploaded through the Files API, then transcribed
 by the model), saved under workspace/cache/ keyed by the file's SHA-256, and reused.

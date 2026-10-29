@@ -3,7 +3,7 @@ genuine reference signature of the same person on another page?
 
 The agent names both pages: the page to check, and a page the signer genuinely signed.
 The verdict is one of VERDICTS. Anything other than "consistent" becomes a signature
-flag the attorney reviews at sign-off, and the memo rules refuse a finding marked proven
+flag the broker reviews at sign-off, and the declaration rules refuse a finding marked proven
 on that signature.
 
 PLACEHOLDER: reports every signature as consistent, so the end-to-end flow can be tested.

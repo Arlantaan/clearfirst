@@ -1,4 +1,4 @@
-"""The Legal Agent: the agentic loop. Not implemented yet.
+"""The Customs Agent: the agentic loop. Not implemented yet.
 
 run_agent works the case; resume_run continues a run that stopped.
 """
@@ -16,7 +16,7 @@ from agent_kit.settings import case_dir, model
 
 def run_agent(*, root: Path, client: OpenAI, turns: int = 30) -> dict:
     root = Path(root)
-    instructions = (root / "legal_agent/system_instructions.md").read_text()
+    instructions = (root / "customs_agent/system_instructions.md").read_text()
     objective = (case_dir(root) / "objective.md").read_text()
     run_id = progress.new_run(root, instructions=instructions, objective=objective)
     messages: list = [{"role": "user", "content": objective}]
@@ -34,7 +34,7 @@ def resume_run(*, root: Path, run_id: str, client: OpenAI, turns: int = 15) -> d
             "turn": saved["turn"],
             "note": step.get("note", ""),
         }
-    instructions = (root / "legal_agent/system_instructions.md").read_text()
+    instructions = (root / "customs_agent/system_instructions.md").read_text()
     messages: list = list(saved["messages"]) + [
         {"role": "user", "content": step["message"]}
     ]
@@ -49,7 +49,7 @@ def _drive(
             messages.append(
                 {
                     "role": "user",
-                    "content": "This is your last turn. File your memo now with submit_memo using what you have.",
+                    "content": "This is your last turn. File your declaration now with submit_declaration using what you have.",
                 }
             )
         try:

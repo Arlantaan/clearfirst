@@ -20,14 +20,12 @@ def sam_model() -> str:
 
 def verification_enabled() -> bool:
     """VERIFICATION=on: new runs get the verification layer (agent/verification/): the
-    checks run at fixed points, three more tools, escalation, and attorney sign-off."""
+    checks run at fixed points, three more tools, escalation, and broker sign-off."""
     return os.environ.get("VERIFICATION", "off").strip().lower() in _TRUE
 
 
 def case_dir(root: Path) -> Path:
     """The case folder (CASE_DIR, absolute or relative to the agent folder): objective.md and documents/."""
-    value = os.environ.get("CASE_DIR", "").strip()
-    if not value:
-        raise RuntimeError("CASE_DIR is not set: point it at a case folder in .env")
+    value = os.environ.get("CASE_DIR", "").strip() or "../cases/gypsum-boards-tr"
     path = Path(value).expanduser()
     return path if path.is_absolute() else (Path(root) / path).resolve()

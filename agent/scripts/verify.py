@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Run the verification checks on a finished run's memo or checklist (the agent is not involved).
+"""Run the verification checks on a finished run's declaration or checklist (the agent is not involved).
 
-./helper verify RUN_ID --memo        # the memo rules (verification/verify_memo.py) and the claims check
+./helper verify RUN_ID --declaration        # the declaration rules (verification/verify_declaration.py) and the claims check
 ./helper verify RUN_ID --checklist   # the checklist against the case's ground truth (verification/verify_checklist.py)
 
 The same check functions the tools call. Results are saved with the run
@@ -34,20 +34,20 @@ def context(client, root: Path, run_id: str) -> tools.Context:
     return tools.Context(client, root, run_id, CaseRecord(root, run_id), True)
 
 
-def verify_memo(ctx: tools.Context) -> dict:
-    filed = ctx.case.data.get("memo")
+def verify_declaration(ctx: tools.Context) -> dict:
+    filed = ctx.case.data.get("declaration")
     if not filed:
-        raise RuntimeError(f"{ctx.run_id} has no memo to verify")
-    memo = {
+        raise RuntimeError(f"{ctx.run_id} has no declaration to verify")
+    declaration = {
         k: filed.get(k, "" if k != "findings" else [])
         for k in ("conclusion", "findings", "gaps")
     }
-    rules = importlib.import_module("verification.verify_memo").run_verification(
-        ctx, memo
+    rules = importlib.import_module("verification.verify_declaration").run_verification(
+        ctx, declaration
     )
-    claims = verify_claims.run_verification(ctx, memo)
+    claims = verify_claims.run_verification(ctx, declaration)
     return {
-        "what": "memo",
+        "what": "declaration",
         "passed": bool(rules.get("passed") and claims.get("passed")),
         "rules": [str(p) for p in rules.get("feedback") or []],
         "claims": [str(p) for p in claims.get("feedback") or []],
@@ -86,7 +86,7 @@ def main() -> None:
     )
     parser.add_argument("run_id")
     what = parser.add_mutually_exclusive_group(required=True)
-    what.add_argument("--memo", action="store_true")
+    what.add_argument("--declaration", action="store_true")
     what.add_argument("--checklist", action="store_true")
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
     args = parser.parse_args()
@@ -95,14 +95,14 @@ def main() -> None:
     try:
         with contextlib.redirect_stdout(sys.stderr):  # stdout carries only the result
             ctx = context(make_client(), ROOT, args.run_id)
-            result = (verify_memo if args.memo else verify_checklist)(ctx)
+            result = (verify_declaration if args.declaration else verify_checklist)(ctx)
     except (MissingKeyError, RuntimeError, FileNotFoundError) as error:
         sys.exit(str(error))
     result = save(ROOT, args.run_id, result)
     if args.json:
         print(json.dumps(result, indent=2))
-    elif args.memo:
-        print("MEMO " + ("passes" if result["passed"] else "fails"))
+    elif args.declaration:
+        print("DECLARATION " + ("passes" if result["passed"] else "fails"))
         for problem in result["rules"]:
             print(f"  rule:  {problem}")
         for problem in result["claims"]:

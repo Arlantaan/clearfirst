@@ -1,11 +1,11 @@
-"""The memo rules. run_verification is not implemented yet.
+"""The declaration rules. run_verification is not implemented yet.
 
-Called when the agent calls submit_memo with VERIFICATION=on, and by
-./helper verify RUN --memo.
+Called when the agent calls submit_declaration with VERIFICATION=on, and by
+./helper verify RUN --declaration.
 
-    run_verification(ctx, memo) -> {"passed": bool, "feedback": [problem, ...]}
+    run_verification(ctx, declaration) -> {"passed": bool, "feedback": [problem, ...]}
 
-memo = {"conclusion": str, "findings": [{"item", "status", "summary", "citations": [
+declaration = {"conclusion": str, "findings": [{"item", "status", "summary", "citations": [
 {"document_id", "page", "quote"}]}], "gaps": str}. ctx.case is the run's CaseRecord:
 case.data["checklist"], case.data["facts"], case.data["signature_checks"] (each with
 document_id, page, verdict), case.flagged(document_id), case.open_requests(). Compare
@@ -25,5 +25,5 @@ Rules (one problem string per break, which the agent reads and fixes; passed = n
 from __future__ import annotations
 
 
-def run_verification(ctx, memo: dict) -> dict:
-    raise NotImplementedError("verification/verify_memo.py is not implemented yet")
+def run_verification(ctx, declaration: dict) -> dict:
+    raise NotImplementedError("verification/verify_declaration.py is not implemented yet")

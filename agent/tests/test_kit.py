@@ -93,7 +93,7 @@ class KitTest(unittest.TestCase):
                     state["now"] -= 1
 
         self.fake.responder = slow
-        ids = ["DOC-REPORT", "DOC-MINUTES", "DOC-MEMO", "DOC-REF"]
+        ids = ["DOC-REPORT", "DOC-MINUTES", "DOC-DECLARATION", "DOC-REF"]
         self.assertEqual(ids, [d["document_id"] for d in self.read(ids)["documents"]])
         self.assertEqual(4, state["max"])
 
@@ -101,17 +101,17 @@ class KitTest(unittest.TestCase):
         original = self.fake.responder
 
         def broken(kind, payload):
-            if kind == "respond" and "DOC-MEMO" in json.dumps(payload):
+            if kind == "respond" and "DOC-DECLARATION" in json.dumps(payload):
                 raise Refused("simulated outage")
             return original(kind, payload)
 
         self.fake.responder = broken
         by_id = {
             d["document_id"]: d
-            for d in self.read(["DOC-REPORT", "DOC-MEMO"])["documents"]
+            for d in self.read(["DOC-REPORT", "DOC-DECLARATION"])["documents"]
         }
         self.assertTrue(by_id["DOC-REPORT"]["evidence"])
-        self.assertIn("simulated outage", by_id["DOC-MEMO"]["note"])
+        self.assertIn("simulated outage", by_id["DOC-DECLARATION"]["note"])
         with self.assertRaises(document_text.DocumentError):
             self.read(["DOC-REPORT", "DOC-NOPE"])
 
@@ -152,28 +152,28 @@ class KitTest(unittest.TestCase):
             "citations": [citation] * 4,
         }
         with self.assertRaisesRegex(CaseError, "cites 4 facts"):
-            case.file_memo(
+            case.file_declaration(
                 {"conclusion": "c", "findings": [finding], "gaps": ""}, "unverified"
             )
 
     def test_flagged_document_withdraws_and_blocks_facts(self) -> None:
-        self.read(["DOC-MEMO"])
+        self.read(["DOC-DECLARATION"])
         case = self.case()
         case.record_fact(
             "counterevidence",
-            "DOC-MEMO",
+            "DOC-DECLARATION",
             1,
-            "Attorney work product for the review team",
+            "Broker work product for the review team",
             "c",
         )
-        case.flag_privileged("DOC-MEMO", "attorney work product")
+        case.flag_excluded("DOC-DECLARATION", "broker work product")
         self.assertEqual([], case.data["facts"])
         with self.assertRaisesRegex(CaseError, "confidential"):
             case.record_fact(
                 "counterevidence",
-                "DOC-MEMO",
+                "DOC-DECLARATION",
                 1,
-                "Attorney work product for the review team",
+                "Broker work product for the review team",
                 "c",
             )
 
@@ -240,14 +240,14 @@ class KitTest(unittest.TestCase):
         )
         names = [t["name"] for t in tools.definitions(self.root, verified)]
         self.assertEqual(
-            ["flag_privileged", "request_evidence", "check_signatures"], names[6:]
+            ["flag_excluded", "request_evidence", "check_signatures"], names[6:]
         )
 
-    def test_a_filed_memo_ends_the_run_without_verification(self) -> None:
-        result = self.tool("submit_memo", support.MEMO[1])
-        self.assertEqual(("answered", "unverified"), (result["status"], result["memo"]))
+    def test_a_filed_declaration_ends_the_run_without_verification(self) -> None:
+        result = self.tool("submit_declaration", support.DECLARATION[1])
+        self.assertEqual(("answered", "unverified"), (result["status"], result["declaration"]))
         self.assertEqual(
-            "unverified", CaseRecord(self.root, self.run_id).data["memo"]["status"]
+            "unverified", CaseRecord(self.root, self.run_id).data["declaration"]["status"]
         )
 
     def test_documents_read_are_remembered(self) -> None:
@@ -276,12 +276,12 @@ class KitTest(unittest.TestCase):
         self.assertIn(
             "different page", self.tool("check_signatures", same, run_id)["error"]
         )
-        other = dict(args, reference_document_id="DOC-MEMO", reference_page=1)
+        other = dict(args, reference_document_id="DOC-DECLARATION", reference_page=1)
         result = self.tool("check_signatures", other, run_id)
         self.assertEqual("consistent", result["verdict"])
         check = CaseRecord(self.root, run_id).data["signature_checks"][0]
         self.assertEqual(
-            {"document_id": "DOC-MEMO", "page": 1, "boxes": []}, check["reference"]
+            {"document_id": "DOC-DECLARATION", "page": 1, "boxes": []}, check["reference"]
         )
 
     # ---- pre-built checks ------------------------------------------------------------
@@ -297,10 +297,10 @@ class KitTest(unittest.TestCase):
     def test_verify_claims_reports_unsupported_findings(self) -> None:
         from verification import verify_claims
 
-        memo = support.MEMO[1]
+        declaration = support.DECLARATION[1]
         self.assertEqual(
             {"passed": True, "feedback": []},
-            verify_claims.run_verification(self.ctx(), memo),
+            verify_claims.run_verification(self.ctx(), declaration),
         )
         fake = support.scripted(
             self.root,
@@ -316,7 +316,7 @@ class KitTest(unittest.TestCase):
             CaseRecord(self.root, self.run_id),
             True,
         )
-        result = verify_claims.run_verification(ctx, memo)
+        result = verify_claims.run_verification(ctx, declaration)
         self.assertFalse(result["passed"])
         self.assertIn("ready_statement", result["feedback"][0])
 

@@ -3,7 +3,7 @@
 With verification on, the checklist check (verification/verify_checklist.py) runs first. A
 checklist that fails is refused with the check's feedback, never the ground truth;
 after MAX_TRIES the checklist is accepted, and the score and feedback stay in the case
-record for the attorney.
+record for the broker.
 """
 
 from __future__ import annotations

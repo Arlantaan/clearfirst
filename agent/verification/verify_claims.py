@@ -1,10 +1,10 @@
 """Pre-built: is each finding supported by the quotes it cites?
 
-Called by the submit_memo tool after verify_memo passes, and by ./helper verify RUN --memo.
+Called by the submit_declaration tool after verify_declaration passes, and by ./helper verify RUN --declaration.
 
-    run_verification(ctx, memo) -> {"passed": bool, "feedback": [problem, ...]}
+    run_verification(ctx, declaration) -> {"passed": bool, "feedback": [problem, ...]}
 
-One Muse Spark call judges every proven finding in the memo against its quotes.
+One Muse Spark call judges every proven finding in the declaration against its quotes.
 """
 
 from __future__ import annotations
@@ -25,14 +25,14 @@ Answer only with JSON: {{"unsupported": [{{"item": "<item>", "reason": "one sent
 (an empty list when every claim is supported)."""
 
 
-def run_verification(ctx, memo: dict) -> dict:
+def run_verification(ctx, declaration: dict) -> dict:
     findings = [
         {
             "item": f.get("item"),
             "claim": f.get("summary", ""),
             "quotes": [c.get("quote", "") for c in f.get("citations") or []],
         }
-        for f in memo.get("findings") or []
+        for f in declaration.get("findings") or []
         if isinstance(f, dict) and f.get("status") == "proven" and f.get("citations")
     ]
     if not findings:
@@ -51,7 +51,7 @@ def run_verification(ctx, memo: dict) -> dict:
         return {
             "passed": True,
             "feedback": [],
-        }  # an unreadable judgement never blocks the memo
+        }  # an unreadable judgement never blocks the declaration
     problems = [
         f"{u.get('item')}: the finding is not supported by its quotes ({u.get('reason', '')})"
         for u in unsupported

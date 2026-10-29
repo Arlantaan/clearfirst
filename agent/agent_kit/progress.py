@@ -128,7 +128,7 @@ def resume(root: Path, run_id: str) -> dict:
     """Continue a stopped run: apply what a person did since it stopped.
 
     Returns {"message": what to tell the model next, or None when there is nothing to
-    continue, "status": the run's status, "note": why not}. Approving the memo ends the
+    continue, "status": the run's status, "note": why not}. Approving the declaration ends the
     run as done.
     """
     from . import document_text
@@ -140,7 +140,7 @@ def resume(root: Path, run_id: str) -> dict:
     if status == "paused":
         if progress["notes"].get("branched_from") and not progress["turn"]:
             return _go(BRANCH_MESSAGE)
-        return _go("You have more turns. Continue, and finish with submit_memo.")
+        return _go("You have more turns. Continue, and finish with submit_declaration.")
     if status == "needs_input":
         requests = case.data["requests"]
         if not requests:
@@ -161,24 +161,24 @@ def resume(root: Path, run_id: str) -> dict:
             message += f"\nReleased documents: {', '.join(fresh)}"
         return _go(message + "\nContinue the investigation.")
     if status == "awaiting_signoff":
-        review = (case.data.get("memo") or {}).get("review")
+        review = (case.data.get("declaration") or {}).get("review")
         if not review:
             return _stop(
-                status, "waiting for the attorney to approve or reject the memo"
+                status, "waiting for the broker to approve or reject the declaration"
             )
         if review["decision"] == "approved":
             save_progress(root, run_id, progress["messages"], status="done")
-            return _stop("done", "the attorney approved the memo")
+            return _stop("done", "the broker approved the declaration")
         return _go(
-            f"The attorney rejected the memo: {review['notes']}. "
-            "Address the notes and submit a revised memo."
+            f"The broker rejected the declaration: {review['notes']}. "
+            "Address the notes and submit a revised declaration."
         )
     return _stop(status, f"run is {status}; nothing to resume")
 
 
 BRANCH_MESSAGE = (
     "This run continues from your checklist with the verification layer on. "
-    "Fix what the check says, then plan, investigate, and file your memo."
+    "Fix what the check says, then plan, investigate, and file your declaration."
 )
 
 
@@ -324,7 +324,7 @@ def _summary(output: Any) -> str:  # noqa: C901
     if result.get("escalated"):
         return "escalated to a person"
     if result.get("filed"):
-        return f"memo filed ({result.get('memo')})"
+        return f"declaration filed ({result.get('declaration')})"
     if "verdict" in result:
         return f"signature {result['verdict']}"
     if "flagged" in result:

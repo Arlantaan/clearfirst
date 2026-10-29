@@ -7,12 +7,12 @@ run(ctx, args) (what happens when the model calls it).
 
 BASE_TOOLS are the six tools the agent always has. VERIFIER_TOOLS are added for runs
 started with VERIFICATION=on, and with it on, set_checklist, analyze_document and
-submit_memo also run the checks in agent/verification/ at their fixed points.
+submit_declaration also run the checks in agent/verification/ at their fixed points.
 
 A result is what the model sees next. A refused call comes back as {"error": ...} so the
 model can correct it. A result carries "status" only when the run must stop:
-"answered" (memo filed, verification off), "needs_input" (a person must act),
-"awaiting_signoff" (memo passed the checks), or "paused" (a check is not built yet).
+"answered" (declaration filed, verification off), "needs_input" (a person must act),
+"awaiting_signoff" (declaration passed the checks), or "paused" (a check is not built yet).
 """
 
 from __future__ import annotations
@@ -29,12 +29,12 @@ from ..progress import load_progress
 from . import (
     analyze_document,
     check_signatures,
-    flag_privileged,
+    flag_excluded,
     list_documents,
     record_fact,
     request_evidence,
     set_checklist,
-    submit_memo,
+    submit_declaration,
     update_plan,
 )
 
@@ -44,9 +44,9 @@ BASE_TOOLS = [
     "list_documents",
     "analyze_document",
     "record_fact",
-    "submit_memo",
+    "submit_declaration",
 ]
-VERIFIER_TOOLS = ["flag_privileged", "request_evidence", "check_signatures"]
+VERIFIER_TOOLS = ["flag_excluded", "request_evidence", "check_signatures"]
 
 MODULES: dict[str, Any] = {
     str(m.DEFINITION["name"]): m
@@ -56,8 +56,8 @@ MODULES: dict[str, Any] = {
         list_documents,
         analyze_document,
         record_fact,
-        submit_memo,
-        flag_privileged,
+        submit_declaration,
+        flag_excluded,
         request_evidence,
         check_signatures,
     )
