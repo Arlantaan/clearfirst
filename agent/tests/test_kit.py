@@ -278,6 +278,35 @@ class KitTest(unittest.TestCase):
             ):
                 case.file_declaration(args, "unverified")
 
+    def test_declaration_tool_schema_is_strict_and_shows_where_values_go(self) -> None:
+        from agent_kit.tools import submit_declaration
+
+        header = submit_declaration.DEFINITION["parameters"]["properties"]["header"]
+        self.assertFalse(header["additionalProperties"])
+        for key in ("importer", "exporter", "transport", "valuation"):
+            self.assertFalse(header["properties"][key]["additionalProperties"])
+        self.assertIn("citations", header["properties"])
+        self.assertIn("nested objects", header["description"])
+        self.assertIn("importer.tin", submit_declaration.DEFINITION["description"])
+
+    def test_flat_header_is_refused_naming_values_and_where_they_go(self) -> None:
+        case = self.case()
+        args = {
+            "header": {
+                "importer.name": [dict(support.CITE)],
+                "exporter.country": [dict(support.CITE)],
+            },
+            "items": [],
+            "discrepancies": [],
+            "open_questions": [],
+        }
+        with self.assertRaisesRegex(
+            CaseError, "missing header values for: .*exporter\\.country"
+        ):
+            case.file_declaration(args, "unverified")
+        with self.assertRaisesRegex(CaseError, "citations under header\\.citations"):
+            case.file_declaration(args, "unverified")
+
     def test_declaration_refuses_missing_fields_bad_quotes_and_excluded_docs(
         self,
     ) -> None:

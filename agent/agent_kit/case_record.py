@@ -460,6 +460,16 @@ class CaseRecord:
         def named(path: str) -> bool:
             return path in named_fields or any(path in q for q in questions)
 
+        missing_values = [
+            p for p in HEADER_FIELDS if _is_blank(_header_value(header, p))
+        ]
+        if missing_values:
+            raise CaseError(
+                "missing header values for: "
+                + ", ".join(missing_values)
+                + " — put values in header.importer/exporter/transport/valuation, "
+                + "citations under header.citations"
+            )
         citations = header.get("citations") or {}
         if not isinstance(citations, dict):
             raise CaseError("header citations must be an object keyed by field path")
@@ -473,15 +483,6 @@ class CaseRecord:
             raise CaseError(
                 f"{', '.join(broker_cited)} are declared by the broker and take "
                 "no citation; remove their citations"
-            )
-        missing_values = [
-            p for p in HEADER_FIELDS if _is_blank(_header_value(header, p))
-        ]
-        if missing_values:
-            raise CaseError(
-                "missing header values for: "
-                + ", ".join(missing_values)
-                + "; fill every header box"
             )
         missing = []
         for path in HEADER_FIELDS:

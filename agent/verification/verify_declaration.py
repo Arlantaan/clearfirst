@@ -188,11 +188,16 @@ def run_verification(ctx, declaration: dict) -> dict:
             problems.append(f"{label} is supported by only one document.")
 
     # Rule 6: header value sanity.
-    total = _as_number(_at(header, "valuation.invoice_total"))
-    if total is None or total <= 0:
+    raw_total = _at(header, "valuation.invoice_total")
+    total = _as_number(raw_total)
+    if _is_blank(raw_total):
+        problems.append("valuation.invoice_total is missing.")
+    elif total is None or total <= 0:
         problems.append("valuation.invoice_total must be a positive number.")
     country = _at(header, "exporter.country")
-    if not isinstance(country, str) or not COUNTRY.match(country.strip()):
+    if _is_blank(country):
+        problems.append("exporter.country is missing.")
+    elif not isinstance(country, str) or not COUNTRY.match(country.strip()):
         problems.append("exporter.country must be a 2-letter code.")
     dict_items = [item for item in items if isinstance(item, dict)]
     values = []
@@ -200,15 +205,22 @@ def run_verification(ctx, declaration: dict) -> dict:
         if not isinstance(item, dict):
             continue
         code = item.get("hs_code")
-        if not isinstance(code, str) or not HS_CODE.match(code.strip()):
+        if _is_blank(code):
+            problems.append(f"items[{index}].hs_code is missing.")
+        elif not isinstance(code, str) or not HS_CODE.match(code.strip()):
             problems.append(f"items[{index}].hs_code '{code}' is not a valid HS code.")
         origin = item.get("origin")
-        if not isinstance(origin, str) or not COUNTRY.match(origin.strip()):
+        if _is_blank(origin):
+            problems.append(f"items[{index}].origin is missing.")
+        elif not isinstance(origin, str) or not COUNTRY.match(origin.strip()):
             problems.append(f"items[{index}].origin must be a 2-letter code.")
         weighed = {}
         for field in ("packages", "gross_kg", "net_kg"):
-            number = _as_number(item.get(field))
-            if number is None or number <= 0:
+            raw = item.get(field)
+            number = _as_number(raw)
+            if _is_blank(raw):
+                problems.append(f"items[{index}].{field} is missing.")
+            elif number is None or number <= 0:
                 problems.append(f"items[{index}].{field} must be a positive number.")
             else:
                 weighed[field] = number
@@ -218,8 +230,11 @@ def run_verification(ctx, declaration: dict) -> dict:
             and weighed["net_kg"] > weighed["gross_kg"]
         ):
             problems.append(f"items[{index}].net_kg exceeds gross_kg.")
-        value = _as_number(item.get("item_value"))
-        if value is None:
+        raw_value = item.get("item_value")
+        value = _as_number(raw_value)
+        if _is_blank(raw_value):
+            problems.append(f"items[{index}].item_value is missing.")
+        elif value is None:
             problems.append(f"items[{index}].item_value must be a number.")
         else:
             values.append(value)
@@ -265,6 +280,11 @@ def _at(mapping: dict, path: str):
             return None
         value = value.get(part)
     return value
+
+
+def _is_blank(value) -> bool:
+    """Missing, or a string with nothing in it. Numbers (even 0) count as present."""
+    return value is None or (isinstance(value, str) and not value.strip())
 
 
 def _as_number(value):

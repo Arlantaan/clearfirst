@@ -44,6 +44,9 @@ CITATION_LIST = {
 HEADER = {
     "type": "object",
     "additionalProperties": False,
+    "description": "SAD header boxes. Put values in the nested objects (importer, "
+    "exporter, transport, valuation) and quotes under \"citations\", keyed by field "
+    "path. No other keys allowed.",
     "properties": {
         "declaration_type": {"type": "string"},
         "procedure_code": {"type": "string"},
@@ -162,7 +165,9 @@ DEFINITION = {
     "description": "File the SAD declaration: header boxes with per-field citations, goods items with "
     "HS codes and citations, discrepancies where documents disagree, and open questions. Fill every "
     "header box; every other header and item field must be cited (1-3 quotes) or named in "
-    "discrepancies/open_questions. declaration_type and procedure_code take no citation.",
+    "discrepancies/open_questions. declaration_type and procedure_code take no citation. "
+    "Example header: {\"importer\": {\"name\": \"...\", \"tin\": \"...\"}, \"citations\": "
+    "{\"importer.tin\": [{\"document_id\": \"...\", \"page\": 1, \"quote\": \"...\"}]}}.",
     "parameters": {
         "type": "object",
         "additionalProperties": False,

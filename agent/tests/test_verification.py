@@ -541,6 +541,39 @@ class DeclarationRulesTest(unittest.TestCase):
         found = self.problems(declaration)
         self.assertIn("valuation.invoice_total must be a positive number.", found)
 
+    def test_blank_values_are_missing_and_strings_are_normalised(self) -> None:
+        header = support.header_values()
+        header["valuation"]["invoice_total"] = "21,000"
+        header["exporter"]["country"] = "tr"
+        item = support.cited_declaration()["items"][0]
+        item["item_value"] = 21000
+        item["citations"] = []
+        named = [
+            "valuation.invoice_total",
+            "importer.name",
+            "items[0].gross_kg",
+            "items[0].net_kg",
+            "items[0].packages",
+            "items[0].hs_code",
+        ]
+        declaration = {
+            "header": header,
+            "items": [item],
+            "discrepancies": [],
+            "open_questions": list(named),
+        }
+        found = self.problems(declaration)
+        self.assertFalse(
+            [p for p in found if "invoice_total" in p or "exporter.country" in p]
+        )
+        header["valuation"]["invoice_total"] = ""
+        header["exporter"]["country"] = ""
+        item["hs_code"] = ""
+        found = self.problems(declaration)
+        self.assertIn("valuation.invoice_total is missing.", found)
+        self.assertIn("exporter.country is missing.", found)
+        self.assertIn("items[0].hs_code is missing.", found)
+
     def test_a_good_declaration_has_no_problems(self) -> None:
         self.read(ALL_INITIAL)
         support.release(self.root)
