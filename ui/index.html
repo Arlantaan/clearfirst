@@ -265,10 +265,10 @@ async function selectCase(id) {
   const current = (info.cases || []).find(c => c.path === info.case);
   const target = (info.cases || []).find(c => c.id === id);
   if (!target || (current && current.id === id)) return;
-  if (!confirm(`Switch to “${target.title}”?\n\nThe inbox is reset to ${target.path}/documents (runs are kept).`)) { renderShips(true); return; }
+  if (!confirm(`Switch to “${target.title}”?\n\nThe inbox is reset to ${target.path}/documents. Each shipment shows only its own runs.`)) { renderShips(true); return; }
   try {
     info = await api("/api/case", {case: id});
-    selected = null; window._picked = false; window._briefKey = null; window._casesKey = null;
+    selected = null; detail = null; events = []; window._briefKey = null; window._casesKey = null; $("timeline").innerHTML = "";
     toast(`Case: ${target.title}`); refreshDocs(); poll();
   } catch (e) { toast(e.message, true); renderShips(true); }
 }
@@ -341,7 +341,7 @@ async function createShipment() {
   try {
     $("createShipBtn").disabled = true;
     info = await api("/api/shipments", {name, files: pendingFiles.map(({filename, data}) => ({filename, data}))});
-    selected = null; window._picked = false; window._briefKey = null; window._casesKey = null;
+    selected = null; detail = null; events = []; window._briefKey = null; window._casesKey = null; $("timeline").innerHTML = "";
     $("newShip").close(); toast(`Shipment created: ${name}`);
     (info.warnings || []).forEach(w => toast(w, true));
     refreshDocs(); poll();
@@ -357,7 +357,7 @@ async function exportFile(fmt) {
     a.download = `${selected}.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
   } catch (e) { toast(e.message, true); }
 }
-async function resetCase() { if (!confirm("Reset the inbox to the initial release? (Runs are kept.)")) return; try { await api("/api/reset", {clear_runs:false}); toast("Case reset to the initial release"); refreshDocs(); } catch (e) { toast(e.message, true); } }
+async function resetCase() { if (!confirm("Reset this shipment? This clears its runs and resets the inbox to the initial release. Other shipments are untouched.")) return; try { const r = await api("/api/reset", {}); selected = null; detail = null; events = []; toast(`Shipment reset (${(r.cleared_runs || []).length} run(s) cleared)`); refreshDocs(); poll(); } catch (e) { toast(e.message, true); } }
 async function nextTurn() { try { await api("/api/control", {next: true}); } catch (e) { toast(e.message, true); } }
 async function runToEnd() { try { await api("/api/control", {step: false}); $("step").checked = false; } catch (e) { toast(e.message, true); } }
 async function loadBrief() {
@@ -762,9 +762,12 @@ async function poll() {
     const last = (info.jobs || []).slice(-1)[0];
     if (last && last.run_id && last.running && last.run_id !== selected && autoFollow) { autoFollow = null; select(last.run_id); return; }
     if (last && !last.running && last.returncode && !last.run_id && !shownFailures.has(last.id)) { shownFailures.add(last.id); toast(`Agent failed: ${short(last.log, 220)}`, true); }
-    const runs = await api("/api/runs"); renderRuns(runs);
+    const cur = (info.cases || []).find(c => c.path === info.case);
+    const runs = await api(`/api/runs?case=${cur ? cur.id : ""}`); renderRuns(runs);
+    const ids = new Set(runs.map(r => r.id));
+    if (selected && !ids.has(selected)) { selected = null; detail = null; events = []; }
     if (!selected && !runs.length) $("timeline").innerHTML = `<div class="empty">Ready. Press Prepare declaration${info.agent_ready ? "" : " (build customs_agent/loop.py first)"}. Each turn appears here as Plan → Act → Observe.</div>`;
-    if (!selected && runs.length && !window._picked) { window._picked = true; const cur = (info.cases || []).find(c => c.path === info.case); select((cur && cur.run_id) || runs[0].id); return; }
+    if (!selected && runs.length) { select((cur && cur.run_id && ids.has(cur.run_id)) ? cur.run_id : runs[0].id); return; }
     if (selected) {
       const d = await api(`/api/runs/${selected}`);
       detail = d;
@@ -775,6 +778,10 @@ async function poll() {
       detail = null;
       setHtml($("cards"), ""); setHtml($("devVerify"), ""); renderProgress();
       if (window._lastHead !== "") { window._lastHead = ""; $("runhead").innerHTML = '<div class="muted small">No runs yet</div>'; }
+      setHtml($("checklist"), '<div class="muted small">—</div>'); $("ckcount").textContent = "";
+      $("sigs").innerHTML = '<div class="muted small">No signatures checked yet</div>';
+      $("plan").innerHTML = '<li class="muted">No plan yet</li>';
+      $("stateinfo").innerHTML = "—";
     }
   } catch (e) { /* server restarting */ }
 }

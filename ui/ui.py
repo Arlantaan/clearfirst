@@ -552,14 +552,9 @@ class Console:
         """The newest run per case. list_runs is newest-first, so the first wins.
         Runs without a mapping are attributed by document match; runs with no
         documents yet (just started) belong to the current case."""
-        mapping = self._run_cases()
-        current = self.case_dir().name
         latest: dict = {}
         for run in self.list_runs():
-            case_id = (
-                mapping.get(run["id"]) or self._attribute_run(run["id"]) or current
-            )
-            latest.setdefault(case_id, run)
+            latest.setdefault(self.attribute_run(run["id"]), run)
         return latest
 
     def _attribute_run(self, run_id: str) -> str | None:
@@ -714,7 +709,17 @@ class Console:
         return loop.is_file() and "is not implemented yet" not in loop.read_text()
 
     # ---- reads ----
-    def list_runs(self) -> list:
+    def attribute_run(self, run_id: str) -> str:
+        """The case a run belongs to: the run->case map, document-id overlap
+        with each case's documents/ for older runs, else the current case
+        (a run with no documents yet was just started here)."""
+        return (
+            self._run_cases().get(run_id)
+            or self._attribute_run(run_id)
+            or self.case_dir().name
+        )
+
+    def list_runs(self, case_id: str | None = None) -> list:
         if not self.workshop or not self.runs.exists():
             return []
         rows = []
@@ -731,6 +736,8 @@ class Console:
                     "started": progress.get("started"),
                 }
             )
+        if case_id:
+            rows = [r for r in rows if self.attribute_run(r["id"]) == case_id]
         return rows
 
     def run_detail(self, run_id: str) -> dict:
@@ -937,12 +944,33 @@ class Console:
             self._record_run_case(result["run_id"], self.case_dir().name)
         return result
 
-    def reset(self, clear_runs: bool) -> dict:
+    def reset(self) -> dict:
+        """Reset the selected shipment: clear its runs and re-seed its inbox.
+        Other shipments' runs are never touched."""
         if self.jobs.any_running():
             raise RuntimeError("stop the running agent before resetting")
-        return self._cmd(
-            ["./helper", "reset"] + (["--clear-runs"] if clear_runs else []), self.agent
-        )
+        case_id = self.case_dir().name
+        mapping = self._run_cases()
+        removed = []
+        for run in self.list_runs():
+            if self.attribute_run(run["id"]) != case_id:
+                continue
+            shutil.rmtree(self.runs / run["id"], ignore_errors=True)
+            try:
+                (self.agent / "workspace/case_records" / f"{run['id']}.json").unlink()
+            except OSError:
+                pass
+            mapping.pop(run["id"], None)
+            removed.append(run["id"])
+        with self.jobs.lock:
+            path = self.agent / "workspace/console_runs.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(mapping))
+            tmp.replace(path)
+        result = self._cmd(["./helper", "reset"], self.agent)
+        result["cleared_runs"] = removed
+        return result
 
     def export_run(self, run_id: str, fmt: str) -> tuple:
         """The signed-off declaration as a download: (bytes, content type, filename)."""
@@ -1056,7 +1084,7 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
                 elif parts == ["api", "info"]:
                     self._json(console.info())
                 elif parts == ["api", "runs"]:
-                    self._json(console.list_runs())
+                    self._json(console.list_runs(q.get("case", [""])[0] or None))
                 elif parts == ["api", "documents"]:
                     self._json(console.documents())
                 elif parts == ["api", "describe"]:
@@ -1150,7 +1178,7 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
                 elif parts == ["api", "release"]:
                     self._json(console.release())
                 elif parts == ["api", "reset"]:
-                    self._json(console.reset(bool(b.get("clear_runs"))))
+                    self._json(console.reset())
                 else:
                     self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
             except FileNotFoundError as error:
