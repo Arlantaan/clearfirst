@@ -123,6 +123,17 @@ def _saw(items: list) -> dict:
     }
 
 
+def _humanise(folder_name: str) -> str:
+    """gypsum-boards-tr -> Gypsum boards TR."""
+    words = re.sub(r"[_-]+", " ", folder_name).split()
+    if not words:
+        return folder_name
+    return " ".join(
+        [words[0][:1].upper() + words[0][1:].lower()]
+        + [w.upper() if len(w) <= 2 else w.lower() for w in words[1:]]
+    )
+
+
 def _epoch(stamp: str | None) -> float:
     try:
         return datetime.fromisoformat(stamp or "").timestamp()
@@ -559,15 +570,7 @@ class Console:
             objective = case / "objective.md"
             if not objective.is_file():
                 continue
-            words = re.sub(r"[_-]+", " ", case.name).split()
-            human = (
-                " ".join(
-                    [words[0][:1].upper() + words[0][1:].lower()]
-                    + [w.upper() if len(w) <= 2 else w.lower() for w in words[1:]]
-                )
-                if words
-                else case.name
-            )
+            human = _humanise(case.name)
             bl = re.search(
                 r"shipment\s+([A-Za-z0-9][A-Za-z0-9\-]*)",
                 objective.read_text(errors="replace"),
@@ -1058,7 +1061,11 @@ class Console:
                 from adapters import sad_pdf
 
                 return (
-                    sad_pdf.render(declaration, self._run_objective(run_id)),
+                    sad_pdf.render(
+                        declaration,
+                        self._run_objective(run_id),
+                        shipment=_humanise(self.attribute_run(run_id)),
+                    ),
                     "application/pdf",
                     f"sad-{run_id}.pdf",
                 )

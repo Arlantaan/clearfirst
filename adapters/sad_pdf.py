@@ -42,6 +42,9 @@ GRID = TableStyle(
 )
 
 
+OLD_LEVY_CODES = ("IDF", "PRF", "AUL", "ECL", "GNSW", "VAT")
+
+
 def _pct(value) -> str:
     return f"{value:g}" if isinstance(value, (int, float)) else text(value)
 
@@ -49,19 +52,48 @@ def _pct(value) -> str:
 def _duty_rows(declaration: dict) -> list:
     """Boxes 46/47 from the compute_duty result filed with the declaration."""
     estimate = declaration.get("duty_estimate")
-    levies = estimate.get("levies") if isinstance(estimate, dict) else None
-    if not levies:
+    if not isinstance(estimate, dict):
+        estimate = {}
+    customs = estimate.get("customs_value_gmd", estimate.get("basis"))
+    levies = estimate.get("levies")
+    if levies is None:
+        # Older compute_duty shape: per-levy amounts as top-level keys.
+        levies = [
+            {"code": code, "rate_pct": None, "amount": estimate[code]}
+            for code in OLD_LEVY_CODES
+            if isinstance(estimate.get(code), (int, float))
+        ]
+    else:
+        levies = [l for l in levies if isinstance(l, dict)]
+    total = estimate.get("total_payable_gmd")
+    if customs is None and not levies and total is None:
         return [("46", "Customs value", "Not computed"), ("47", "Taxes", "Not computed")]
-    lines = [
-        f"{text(l.get('code'))} {_pct(l.get('rate_pct'))}%: GMD {money(l.get('amount'))}"
-        for l in levies
-        if isinstance(l, dict)
-    ]
-    lines.append(f"Total payable: GMD {money(estimate.get('total_payable_gmd'))}")
+    lines = []
+    for levy in levies:
+        rate = levy.get("rate_pct")
+        prefix = (
+            f"{text(levy.get('code'))} {_pct(rate)}%: "
+            if isinstance(rate, (int, float))
+            else f"{text(levy.get('code'))}: "
+        )
+        lines.append(f"{prefix}GMD {money(levy.get('amount'))}")
+    if total is not None:
+        lines.append(f"Total payable: GMD {money(total)}")
     return [
-        ("46", "Customs value", f"GMD {money(estimate.get('customs_value_gmd'))}"),
-        ("47", "Taxes", "; ".join(lines)),
+        (
+            "46",
+            "Customs value",
+            f"GMD {money(customs)}" if customs is not None else "\u2014",
+        ),
+        ("47", "Taxes", "; ".join(lines) if lines else "\u2014"),
     ]
+
+
+def _field_label(field: str) -> str:
+    """Short label for a cited field with no SAD box (never the raw path)."""
+    if field in ("transport.port_of_loading", "transport.port_of_discharge"):
+        return "Ports"
+    return text(field).split(".")[-1].replace("_", " ").capitalize() or "\u2014"
 
 
 def _boxes(declaration: dict) -> list:
@@ -129,14 +161,29 @@ def _boxes(declaration: dict) -> list:
                 ),
             ]
         )
-    rows.append(("Duty estimate", "", ""))
+    rows.append(("Duty", "", ""))
     rows.extend(_duty_rows(declaration))
     return rows
 
 
-def render(declaration: dict, objective_text: str = "") -> bytes:
+def render(
+    declaration: dict, objective_text: str = "", shipment: str = "", exported: str = ""
+) -> bytes:
     """The declaration as PDF bytes (two pages)."""
+    from datetime import date
+
     fictional = "fictional" in text(objective_text).lower()
+    header = declaration.get("header") or {}
+    bl_number = text((header.get("transport") or {}).get("bl_number"))
+    subtitle = " \u00b7 ".join(
+        part
+        for part in [
+            f"Shipment: {shipment}" if shipment else "",
+            f"B/L: {bl_number}" if bl_number else "",
+            f"Exported: {exported or date.today().isoformat()}",
+        ]
+        if part
+    )
     styles = getSampleStyleSheet()
     body = styles["Normal"]
     small = ParagraphStyle("small", parent=body, fontSize=8, leading=10)
@@ -147,12 +194,14 @@ def render(declaration: dict, objective_text: str = "") -> bytes:
     doc = SimpleDocTemplate(
         buf, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm
     )
+    sub = ParagraphStyle("sub", parent=body, alignment=1, textColor=colors.grey)
     story: list = [
         Paragraph("Single Administrative Document — IM4", styles["Title"]),
+        Paragraph(escape(subtitle), sub),
         Spacer(1, 4 * mm),
         Table(
             [[cell(box), cell(label), cell(value)] for box, label, value in _boxes(declaration)],
-            colWidths=[14 * mm, 38 * mm, 130 * mm],
+            colWidths=[20 * mm, 38 * mm, 124 * mm],
             style=GRID,
         ),
         PageBreak(),
@@ -162,7 +211,7 @@ def render(declaration: dict, objective_text: str = "") -> bytes:
         Table(
             [[cell("Box", small), cell("Document", small), cell("Page", small), cell("Quote", small)]]
             + [
-                [cell(box or field, small), cell(doc_id, small), cell(page, small), cell(quote, small)]
+                [cell(box or _field_label(field), small), cell(doc_id, small), cell(page, small), cell(quote, small)]
                 for field, box, doc_id, page, quote in header_citations(declaration)
             ]
             + [
@@ -225,10 +274,13 @@ def render(declaration: dict, objective_text: str = "") -> bytes:
     def frame(canvas, _doc) -> None:
         canvas.saveState()
         if fictional:
-            canvas.setFillColor(colors.Color(0.7, 0, 0.7, 0.7))
-            canvas.setFont("Helvetica-Bold", 64)
+            canvas.setFillColor(colors.grey)
+            canvas.setFillAlpha(0.3)
+            canvas.setFont("Helvetica-Bold", 48)
+            canvas.translate(A4[0] / 2, A4[1] / 2)
             canvas.rotate(45)
-            canvas.drawCentredString(300, 100, "FICTIONAL DEMO")
+            canvas.drawCentredString(0, 0, "FICTIONAL DEMO")
+            canvas.setFillAlpha(1)
         canvas.setFillColor(colors.black)
         canvas.setFont("Helvetica", 8)
         canvas.drawRightString(A4[0] - 14 * mm, 12 * mm, f"Page {_doc.page}")
