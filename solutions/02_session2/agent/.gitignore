@@ -1,9 +1,0 @@
-.env
-.venv/
-__pycache__/
-*.pyc
-workspace/inbox/
-workspace/runs/
-workspace/case_records/
-workspace/cache/
-workspace/control.json

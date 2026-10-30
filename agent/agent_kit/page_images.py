@@ -1,18 +1,14 @@
-#!/usr/bin/env python3
-"""Build page images (facilitator utility).
+"""Page images: 100 dpi PNG renders of shipment documents.
 
-Page images (100 dpi PNG) for every document, next to the documents in a
-pages/ folder: the review platform's page renders. check_signatures sends
-these to SAM, so participants need no PDF renderer.
-
-Requires pdftoppm and pdfinfo.
+One <ID>-p<n>.png per page, next to the documents in a pages/ folder.
+check_signatures sends these to SAM; the console shows them and uses render()
+for newly uploaded shipments. Requires pdftoppm and pdfinfo for PDFs.
 """
 
 from __future__ import annotations
 
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 DPI = 100
@@ -29,6 +25,7 @@ def pages_of(pdf: Path) -> int:
 
 
 def render(doc: Path, out_dir: Path) -> int:
+    """Render doc into out_dir as <stem>-p<n>.png. Returns the page count."""
     out_dir.mkdir(exist_ok=True)
     stem = doc.stem
     for old in out_dir.glob(f"{stem}-*.png"):
@@ -64,28 +61,3 @@ def render(doc: Path, out_dir: Path) -> int:
         ).stdout
     )
     return 1
-
-
-def main() -> None:
-    root = (
-        Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
-    )
-    releases = [
-        ("initial", root / "cases/northbridge-v-caldera/documents"),
-        ("follow_up", root / "world/follow_up"),
-    ]
-    for release, folder in releases:
-        for doc in sorted(folder.iterdir()):
-            if not doc.is_file() or doc.suffix.lower() not in {
-                ".pdf",
-                ".jpg",
-                ".jpeg",
-                ".png",
-            }:
-                continue
-            pages = render(doc, folder / "pages")
-            print(doc.stem, release, pages)
-
-
-if __name__ == "__main__":
-    main()

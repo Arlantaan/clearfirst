@@ -199,9 +199,7 @@ def run(ctx: Context, args: dict) -> dict:
         return {"filed": True, "declaration": "unverified", "status": "answered"}
     from verification import verify_claims
 
-    verify_declaration = importlib.import_module(
-        "verification.verify_declaration"
-    )  # yours, built in Session 2
+    verify_declaration = importlib.import_module("verification.verify_declaration")
     result = verify_declaration.run_verification(ctx, declaration)
     if not result.get("passed"):
         problems = [str(p) for p in result.get("feedback") or ["refused"]]

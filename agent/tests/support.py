@@ -6,7 +6,10 @@ import json
 import os
 import shutil
 import tempfile
+from io import BytesIO
 from pathlib import Path
+
+from PIL import Image, ImageDraw
 
 from agent_kit.case_record import BROKER_DECLARED, HEADER_FIELDS, ITEM_FIELDS
 from agent_kit.tools import check_signatures
@@ -34,7 +37,18 @@ FOLLOW_UP = {
         "UAT Phase 2 exit certification. I certify that all exit criteria have been satisfied. D. Okafor."
     ],
 }
-PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000")
+def _page_png(seed: int) -> bytes:
+    """A real 200x120 PNG (white with an ink scribble) for check_signatures to crop."""
+    image = Image.new("RGB", (200, 120), "white")
+    draw = ImageDraw.Draw(image)
+    draw.line(
+        [(20 + seed, 90), (60 + seed, 60), (100 + seed, 95), (150 + seed, 55)],
+        fill="black",
+        width=2,
+    )
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 # The tiny case's ground-truth checklist (verification data outside the case; never sent to the model).
@@ -188,9 +202,8 @@ def _write_doc(folder: Path, doc_id: str, pages: list) -> dict:
     (folder / f"{doc_id}.pdf").write_bytes(content)
     (folder / "pages").mkdir(exist_ok=True)
     for n in range(1, len(pages) + 1):
-        (folder / "pages" / f"{doc_id}-p{n}.png").write_bytes(
-            PNG + doc_id.encode() + bytes([n])
-        )
+        seed = sum(doc_id.encode()) + n
+        (folder / "pages" / f"{doc_id}-p{n}.png").write_bytes(_page_png(seed % 40))
     return {"id": doc_id, "file": f"{doc_id}.pdf"}
 
 

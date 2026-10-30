@@ -6,7 +6,7 @@ When a run stops for a person, what the person sees, and how the run resumes. Al
 
 | Trigger | Rule | What unblocks it |
 |---|---|---|
-| The agent calls `request_evidence` and `verification/verify_evidence_request.py` allows it | `missing_evidence` | The reviewer releases documents into the inbox (`world/release.py` or the console), or replies (`./helper review RUN --answer R1 --notes "..."`) |
+| The agent calls `request_evidence` and `verification/verify_evidence_request.py` allows it | `missing_evidence` | The broker adds the missing documents to the inbox and resumes the run (`./helper resume RUN --turns 15`), or replies (`./helper review RUN --answer R1 --notes "..."`) |
 | The declaration is refused 3 times | `declaration_refused` | The reviewer replies with guidance |
 | The declaration passes the declaration rules and the claims check | declaration sign-off | The broker approves, or rejects with notes (`./helper review RUN --approve` / `--reject --notes "..."`) |
 

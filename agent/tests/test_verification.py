@@ -890,8 +890,8 @@ class VerifiedRunTest(unittest.TestCase):
 
 
 @SKIP
-class ContinueFromSessionOneTest(unittest.TestCase):
-    """./helper verify on a finished Session 1 run, then ./helper branch from its checklist."""
+class ContinueFromEarlierRunTest(unittest.TestCase):
+    """./helper verify on a finished run without verification, then ./helper branch from its checklist."""
 
     def setUp(self) -> None:
         from customs_agent.loop import resume_run, run_agent
@@ -901,7 +901,7 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
 
     def test_verify_finds_the_declaration_and_checklist_problems(self) -> None:
-        run_id = self._session_one()
+        run_id = self._earlier_run()
         fake = support.scripted(self.root, [])
         declaration = verify.verify_declaration(verify.context(fake.client, self.root, run_id))
         self.assertFalse(declaration["passed"])
@@ -923,7 +923,7 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         )  # the run is unchanged
 
     def test_branch_continues_from_the_checklist_with_verification_on(self) -> None:
-        run_id = self._session_one()
+        run_id = self._earlier_run()
         fake = support.scripted(self.root, [SAD_CHECKLIST, support.PLAN, READ_ALL])
         with mock.patch(
             "verification.verify_checklist.run_verification",
@@ -954,9 +954,9 @@ class ContinueFromSessionOneTest(unittest.TestCase):
         self.assertEqual(6, len(case["checklist"]))
         self.assertEqual(
             5, len(support.case(self.root, run_id)["checklist"])
-        )  # the Session 1 run is unchanged
+        )  # the earlier run is unchanged
 
-    def _session_one(self) -> str:
+    def _earlier_run(self) -> str:
         os.environ["VERIFICATION"] = "off"
         try:
             fake = support.scripted(

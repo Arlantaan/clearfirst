@@ -145,7 +145,6 @@ const BTN_P = "bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-mediu
 const BTN_O = "bg-white hover:bg-slate-50 border border-slate-300 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-45 disabled:cursor-default";
 const BTN_P_SM = "bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg disabled:opacity-45 disabled:cursor-default";
 const BTN_O_SM = "bg-white hover:bg-slate-50 border border-slate-300 text-sm font-medium px-3 py-1.5 rounded-lg disabled:opacity-45 disabled:cursor-default";
-const BTN_AMBER = "bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-45 disabled:cursor-default";
 const SECT = "text-xs font-semibold uppercase tracking-wide text-slate-500";
 const INPUT = "border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
 const AREA = INPUT + " w-full min-h-[52px]";
@@ -256,7 +255,6 @@ async function branchRun() {
   finally { setVerifyBusy(null); }
   if (r) { toast(`Continued as a new run (${r.run_id}). Resume it to let the agent go on.`); select(r.run_id); }
 }
-async function releaseEvidence() { try { const r = await api("/api/release", {}); toast(r.message || "Released"); refreshDocs(); } catch (e) { toast(e.message, true); } }
 async function review(decision) {
   const notes = ($("signoffNotes") || {}).value || "";
   if (decision === "reject" && !notes.trim()) { toast("Add notes saying what to fix", true); return; }
@@ -270,7 +268,7 @@ async function answerRequest(requestId) {
 let pendingFiles = [];
 function openNewShipment() { pendingFiles = []; $("shipName").value = ""; renderPending(); $("newShip").showModal(); }
 function renderPending() {
-  $("shipFiles").innerHTML = pendingFiles.map((f, i) => `<div class="text-xs flex justify-between gap-2 py-1"><span>${esc(f.filename)} <span class="text-slate-500">(${(f.bytes / 1024).toFixed(0)} KB)</span></span><a class="file" onclick="pendingFiles.splice(${i},1);renderPending()">remove</a></div>`).join("");
+  $("shipFiles").innerHTML = pendingFiles.map((f, i) => `<div class="text-xs flex justify-between gap-2 py-1"><span>${esc(f.filename)} <span class="text-slate-500">(${fmtN(f.bytes / 1024, "qty")} KB)</span></span><a class="file" onclick="pendingFiles.splice(${i},1);renderPending()">remove</a></div>`).join("");
 }
 function addFiles(list) {
   for (const file of list) {
@@ -303,7 +301,7 @@ async function exportFile(fmt) {
     a.download = `${selected}.${fmt}`; a.click(); URL.revokeObjectURL(a.href);
   } catch (e) { toast(e.message, true); }
 }
-async function resetCase() { if (!confirm("Reset this shipment? This clears its runs and resets the inbox to the initial release. Other shipments are untouched.")) return; try { const r = await api("/api/reset", {}); selected = null; detail = null; events = []; toast(`Shipment reset (${(r.cleared_runs || []).length} run(s) cleared)`); refreshDocs(); poll(); } catch (e) { toast(e.message, true); } }
+async function resetCase() { if (!confirm("Reset this shipment? This clears its runs and resets the inbox to the shipment's documents. Other shipments are untouched.")) return; try { const r = await api("/api/reset", {}); selected = null; detail = null; events = []; toast(`Shipment reset (${(r.cleared_runs || []).length} run(s) cleared)`); refreshDocs(); poll(); } catch (e) { toast(e.message, true); } }
 async function nextTurn() { try { await api("/api/control", {next: true}); } catch (e) { toast(e.message, true); } }
 async function runToEnd() { try { await api("/api/control", {step: false}); $("step").checked = false; } catch (e) { toast(e.message, true); } }
 async function loadBrief() {
@@ -319,7 +317,17 @@ function renderRuns(runs) { window._runs = runs; }
 
 async function refreshDocs() { try { window._docs = await api("/api/documents"); } catch (e) {} }
 
-const pct = v => typeof v === "number" ? `${Math.round(v * 100)}%` : "—";
+// Numbers, one helper: fmtN(1508430, "money") -> "1,508,430.00"; fmtN(28560, "qty") -> "28,560"; fmtN(1.5, "pct") -> "1.5%".
+const fmtN = (v, kind) => {
+  const s = String(v ?? "").replace(/,/g, "").trim();
+  if (!s) return "";
+  const n = Number(s);
+  if (!isFinite(n)) return "";
+  if (kind === "pct") return `${Number(n.toFixed(1))}%`;
+  const dec = kind === "money" ? 2 : 0;
+  return n.toLocaleString("en-US", {minimumFractionDigits: dec, maximumFractionDigits: kind === "money" ? 2 : 2});
+};
+const pct = v => typeof v === "number" ? fmtN(v * 100, "pct") : "—";
 function describe(ev) {
   const p = ev.payload || {}, k = ev.event_type, a = ev.actor;
   switch (k) {
@@ -327,7 +335,7 @@ function describe(ev) {
     case "model_request":
       if (a === "agent") return {c:"k-tool minor", i:"◆", t: p.pending ? "Working on this turn…" : "Agent planning", d:`Turn ${p.turn ?? ""}`};
       return {c:"k-tool minor", i:"◇", t: ({extract_text:"Files API: extract text", analyze:"Model API call: read document", compare_signature:"Model API call: compare signatures", sam_segment:"SAM 3.1: find signatures"})[p.purpose] || "Model API call", d: p.document_id ? `${p.document_id}${p.page ? " p" + p.page : ""}` : ""};
-    case "model_response": return {c:"k-tool minor", i:"◆", t:"Model responded", d:[(p.input_tokens || p.output_tokens) ? `${p.input_tokens||0} in / ${p.output_tokens||0} out` : "", p.boxes != null ? `${p.boxes} box(es)` : ""].filter(Boolean).join(" · ")};
+    case "model_response": return {c:"k-tool minor", i:"◆", t:"Model responded", d:[(p.input_tokens || p.output_tokens) ? `${fmtN(p.input_tokens||0, "qty")} in / ${fmtN(p.output_tokens||0, "qty")} out` : "", p.boxes != null ? `${p.boxes} box(es)` : ""].filter(Boolean).join(" · ")};
     case "file_uploaded": return {c:"k-tool minor", i:"⇪", t:`Uploaded ${p.document_id} to the Files API`, d:p.file_id};
     case "text_extracted": return {c:"k-tool minor", i:"≡", t:`Saved ${p.document_id}'s text (${p.pages} pages): the source of truth`, d:""};
     case "analysis": return {c:"k-tool minor", i:"✓", t:`${p.document_id}: ${p.records} evidence record(s), ${p.verified} verified`, d:""};
@@ -493,7 +501,7 @@ function showTurn(n) {
   const h3 = t => `<h3 class="text-xs text-slate-500 uppercase tracking-wide mt-2.5 mb-1">${t}</h3>`;
   const decided = calls.length ? calls.map(c => box(`<b>Called <code class="font-mono text-xs">${esc(c.payload.tool_name)}</code></b>${codePre(JSON.stringify(c.payload.arguments, null, 2))}`)).join("") : box("No tool call: the model answered in text, so the loop asked it again.");
   const got = results.length ? results.map(r => box(`<b>${esc(r.payload.tool_name)}</b> returned:${codePre(short(JSON.stringify(r.payload.result, null, 2), 1500))}`)).join("") : "";
-  const cost = resp ? `<div class="text-slate-500 text-xs">${resp.payload.input_tokens} in / ${resp.payload.output_tokens} out tokens</div>` : "";
+  const cost = resp ? `<div class="text-slate-500 text-xs">${fmtN(resp.payload.input_tokens, "qty")} in / ${fmtN(resp.payload.output_tokens, "qty")} out tokens</div>` : "";
   dialog(`Turn ${n}: what the model saw and decided`, `<div class="text-[13px]">${h3("1 · What the model saw")}${saw}${cost}${h3("2 · What it decided")}${decided}${h3("3 · What the tool returned (fed back next turn)")}${got || "<div class='text-slate-500'>—</div>"}${h3("4 · After the turn")}${box(saved ? `status <b>${esc(saved.payload.status)}</b> · ${((detail || {}).case || {}).facts ? detail.case.facts.length : 0} fact(s) recorded so far` : "—")}</div>`);
 }
 function dialog(title, html) { $("dlgTitle").textContent = title; $("dlgBody").innerHTML = html; $("dlg").showModal(); }
@@ -532,19 +540,19 @@ function declarationHtml(declaration, cs) {
     `<div class="relative bg-white p-3 pt-6"><span class="absolute top-1 left-2 text-[10px] font-semibold text-slate-400">18</span><div class="text-xs text-slate-500">Vessel</div><div class="text-sm mt-0.5">${esc(txt(tr.vessel))}</div>${bl ? `<div class="text-xs text-slate-500 mt-0.5">B/L ${esc(bl)}</div>` : ""}${citeDetails([...citesFor("transport.vessel"), ...citesFor("transport.bl_number")])}</div>` +
     box("19", "Container", tr.container, ["transport.container"]) +
     box("20", "Incoterm", val.incoterm, ["valuation.incoterm"]) +
-    box("22", "Currency / Total", `${txt(val.currency)} ${txt(val.invoice_total)}`.trim(), ["valuation.currency", "valuation.invoice_total"])
+    box("22", "Currency / Total", `${txt(val.currency)} ${fmtN(val.invoice_total, "money")}`.trim(), ["valuation.currency", "valuation.invoice_total"])
   );
   const items = asList(declaration.items).filter(f => f && typeof f === "object");
   for (const it of items) {
     const list = asList(it.citations).filter(c => c && typeof c === "object");
     html += `<div class="text-xs font-semibold text-slate-700 mt-4 mb-1.5">Item ${esc(txt(it.line))}</div>` + grid(
-      box("31", "Packages and description", `${txt(it.packages)} ${txt(it.package_kind)} — ${txt(it.description)}`, [], true) +
+      box("31", "Packages and description", `${fmtN(it.packages, "qty")} ${txt(it.package_kind)} — ${txt(it.description)}`, [], true) +
       box("33", "HS code", it.hs_code) +
       box("34", "Origin", it.origin) +
-      box("35", "Gross kg", it.gross_kg) +
-      box("38", "Net kg", it.net_kg) +
-      box("41", "Supplementary units", `${txt(it.supplementary_qty)} ${txt(it.supplementary_unit)}`.trim()) +
-      box("42", "Item price", it.item_value)
+      box("35", "Gross kg", fmtN(it.gross_kg, "qty")) +
+      box("38", "Net kg", fmtN(it.net_kg, "qty")) +
+      box("41", "Supplementary units", `${fmtN(it.supplementary_qty, "qty")} ${txt(it.supplementary_unit)}`.trim()) +
+      box("42", "Item price", fmtN(it.item_value, "money"))
     ) + `<div class="text-xs text-slate-500 mt-1.5">HS justification: ${esc(txt(it.hs_justification))}</div>${citeDetails(list)}`;
   }
   const est = declaration.duty_estimate;
@@ -554,10 +562,10 @@ function declarationHtml(declaration, cs) {
     : [];
   const customs = est && typeof est === "object" ? (est.customs_value_gmd ?? est.basis) : undefined;
   html += `<div class="${SECT} mt-4 mb-1.5">Duty</div>` + grid(
-    `<div class="relative bg-white p-3 pt-6"><span class="absolute top-1 left-2 text-[10px] font-semibold text-slate-400">46</span><div class="text-xs text-slate-500">Statistical value</div><div class="text-sm mt-0.5">${customs == null ? `<span class="text-slate-400">Not computed</span>` : `GMD ${esc(txt(customs))}`}</div></div>` +
+    `<div class="relative bg-white p-3 pt-6"><span class="absolute top-1 left-2 text-[10px] font-semibold text-slate-400">46</span><div class="text-xs text-slate-500">Statistical value</div><div class="text-sm mt-0.5">${customs == null ? `<span class="text-slate-400">Not computed</span>` : `GMD ${esc(fmtN(customs, "money"))}`}</div></div>` +
     `<div class="relative bg-white p-3 pt-6 col-span-2"><span class="absolute top-1 left-2 text-[10px] font-semibold text-slate-400">47</span><div class="text-xs text-slate-500">Taxes</div>${
       levies.length
-        ? `<table class="w-full text-sm mt-1"><tbody>${levies.map(l => `<tr><td class="py-0.5">${esc(txt(l.name || l.code))}${l.rate_pct == null ? "" : ` (${esc(txt(l.rate_pct))}%)`}</td><td class="text-right tabular-nums py-0.5">GMD ${esc(txt(l.amount))}</td></tr>`).join("")}<tr class="border-t border-slate-200"><td class="py-1 font-bold">Total payable</td><td class="text-right tabular-nums py-1 font-bold">GMD ${esc(txt(est.total_payable_gmd))}</td></tr></tbody></table>`
+        ? `<table class="w-full text-sm mt-1"><tbody>${levies.map(l => `<tr><td class="py-0.5">${esc(txt(l.name || l.code))}${l.rate_pct == null ? "" : ` (${esc(fmtN(l.rate_pct, "pct"))})`}</td><td class="text-right tabular-nums py-0.5">GMD ${esc(fmtN(l.amount, "money"))}</td></tr>`).join("")}<tr class="border-t border-slate-200"><td class="py-1 font-bold">Total payable</td><td class="text-right tabular-nums py-1 font-bold">GMD ${esc(fmtN(est.total_payable_gmd, "money"))}</td></tr></tbody></table>`
         : `<div class="text-sm mt-0.5 text-slate-400">Not computed</div>`}</div>`
   );
   const discs = asList(declaration.discrepancies).filter(x => x && typeof x === "object");
@@ -585,17 +593,13 @@ function renderCards() {
   const busy = !!d.job || (info.jobs || []).some(j => j.running);
   if (d.status === "needs_input") {
     const req = (cs.requests || []).filter(r => r.status === "open").slice(-1)[0] || {};
-    const withheld = window._docs ? window._docs.withheld : 0;
-    const isRelease = req.rule === "missing_evidence";
     html += `<div class="bg-white rounded-xl border border-slate-200 border-l-4 border-l-amber-500 p-6"><div class="${SECT}">Handoff to the reviewer · the agent is waiting</div>
       <div class="text-[15px] font-semibold mt-1 mb-2">“${esc(req.need || (st.pending || {}).need || "")}”</div>
       <dl class="grid grid-cols-[140px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm my-2"><dt class="text-slate-500">Blocked item</dt><dd>${esc(itemLabel(req.item))}</dd><dt class="text-slate-500">Rule that fired</dt><dd>${esc(req.rule || "")}</dd>
       <dt class="text-slate-500">What was checked</dt><dd>${(st.analyzed_ids || []).length} documents read (${(req.visible_ids || []).length} visible)</dd>
       <dt class="text-slate-500">Evidence so far</dt><dd>${(cs.facts || []).length} verified fact(s): ${(cs.facts || []).map(f => esc(f.item)).join(", ") || "none"}</dd></dl>
       <div class="text-xs text-slate-500 mb-2">The agent stopped instead of guessing and makes no model calls until a person acts.</div>
-      ${isRelease ? `<div class="steps"><button class="${BTN_AMBER}" ${withheld && !busy ? "" : "disabled"} onclick="releaseEvidence()">1 · Release follow-up evidence (${withheld})</button>
-        <button class="${BTN_P}" ${!withheld && !busy ? "" : "disabled"} onclick="resumeRun(15)">2 · Resume this run</button></div>`
-      : `<textarea id="answerNotes" class="${AREA}" placeholder="Reply to the agent"></textarea><div class="steps mt-1.5"><button class="${BTN_P}" ${busy ? "disabled" : ""} onclick="answerRequest('${esc(req.id)}')">Send reply and resume</button></div>`}</div>`;
+      <textarea id="answerNotes" class="${AREA}" placeholder="Reply to the agent"></textarea><div class="steps mt-1.5"><button class="${BTN_P}" ${busy ? "disabled" : ""} onclick="answerRequest('${esc(req.id)}')">Send reply and resume</button></div></div>`;
   }
   const declaration = cs.declaration;
   if (declaration && declaration.status === "awaiting_signoff" && d.status !== "running") {
@@ -634,7 +638,7 @@ function renderCards() {
       ${latest.length ? latest.map(line).join("") : (pending ? "" : `<div class="text-xs text-slate-500 mt-2">No checks run yet.</div>`)}</div>`;
   }
   setHtml($("devVerify"), verifyHtml);
-  if (d.status === "paused" && !d.job && d.branched_from && !(d.state || {}).turn) html += `<div class="bg-white rounded-xl border border-slate-200 p-6"><div class="flex items-center gap-2 flex-wrap"><div class="${SECT}">Continued from ${esc(d.branched_from)} · verification on</div>${chip("paused")}</div><div class="steps mt-2"><span class="text-xs text-slate-500">The agent's Session 1 checklist went through the checklist check (see the timeline). Resume to let the agent continue from there.</span><button class="${BTN_P_SM}" onclick="resumeRun(30)">Resume this run</button></div></div>`;
+  if (d.status === "paused" && !d.job && d.branched_from && !(d.state || {}).turn) html += `<div class="bg-white rounded-xl border border-slate-200 p-6"><div class="flex items-center gap-2 flex-wrap"><div class="${SECT}">Continued from ${esc(d.branched_from)} · verification on</div>${chip("paused")}</div><div class="steps mt-2"><span class="text-xs text-slate-500">The agent's earlier checklist went through the checklist check (see the timeline). Resume to let the agent continue from there.</span><button class="${BTN_P_SM}" onclick="resumeRun(30)">Resume this run</button></div></div>`;
   else if (d.status === "paused" && !d.job) html += `<div class="bg-white rounded-xl border border-slate-200 p-6"><div class="flex items-center gap-2 flex-wrap"><div class="${SECT}">${d.error ? "Paused: the Model API call failed" : "Paused at the turn limit"}</div>${chip("paused")}</div><div class="steps mt-2"><span class="text-xs ${d.error ? "text-red-600" : "text-slate-500"}">${d.error ? esc(short(d.error, 200)) : "Used all its turns without finishing or escalating."}</span><button class="${BTN_O_SM}" onclick="resumeRun(15)">Resume with 15 more turns</button></div></div>`;
   const keep = {}; for (const id of ["signoffNotes", "answerNotes"]) if ($(id)) keep[id] = $(id).value;
   const focused = document.activeElement && document.activeElement.id;
@@ -716,8 +720,8 @@ function renderHead() {
 async function poll() {
   try {
     info = await api("/api/info");
-    if (!info.workshop) { $("brief").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("tools").innerHTML = '<div class="muted small">Workshop unavailable.</div>'; $("startBtn").disabled = true; return; }
-    const briefKey = info.workshop + ":" + info.case + ":" + info.verification + ":" + info.agent_ready;
+    if (!info.project) { $("brief").innerHTML = '<div class="muted small">Project unavailable.</div>'; $("tools").innerHTML = '<div class="muted small">Project unavailable.</div>'; $("startBtn").disabled = true; return; }
+    const briefKey = info.project + ":" + info.case + ":" + info.verification + ":" + info.agent_ready;
     if (window._briefKey !== briefKey) { window._briefKey = briefKey; loadBrief(); }
     renderShips();
     $("envBadges").textContent = `${info.verification ? "Verification on" : "Verification off"} · ${info.model || ""}${info.api_key_configured ? "" : " · no API key"}`;

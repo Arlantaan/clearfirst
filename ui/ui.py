@@ -7,11 +7,11 @@ Standard library only. From the clearfirst folder:
     open http://127.0.0.1:8765
 
 It finds the project automatically (the folder that contains ui/). Use
---workshop PATH only to point it at a different clone.
+--project PATH only to point it at a different clone.
 
 It reads each run's progress.json (agent/workspace/runs/<run>/, written by
 agent_kit.progress) and case record (agent/workspace/case_records/), and acts only
-through the project's own commands (./helper run, ./helper review, world/release.py).
+through the project's own commands (./helper run, ./helper review).
 The console never imports the agent.
 """
 
@@ -34,7 +34,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 CONSOLE = Path(__file__).resolve().parent
-DEFAULT_WORKSHOP = CONSOLE.parent  # ui/ sits at the root of the clearfirst folder
+DEFAULT_PROJECT = CONSOLE.parent  # ui/ sits at the root of the clearfirst folder
 MAX_TURNS = 200
 
 # Run status -> shipment-list label. "paused" (turn limit hit) needs the broker
@@ -498,16 +498,16 @@ class Jobs:
 
 
 class Console:
-    def __init__(self, workshop: Path | None) -> None:
+    def __init__(self, project: Path | None) -> None:
         self.jobs = Jobs()
-        self.workshop: Path | None = None
-        if workshop:
-            self.set_workshop(str(workshop))
+        self.project: Path | None = None
+        if project:
+            self.set_project(str(project))
 
-    # ---- workshop ----
-    def set_workshop(self, path: str) -> dict:
+    # ---- project ----
+    def set_project(self, path: str) -> dict:
         root = Path(path).expanduser().resolve()
-        if (root / "helper").is_file() and (root.parent / "world").is_dir():
+        if (root / "helper").is_file():
             root = root.parent  # pointed at agent/
         if not (root / "agent/helper").is_file():
             raise RuntimeError(
@@ -515,18 +515,14 @@ class Console:
             )
         if self.jobs.any_running():
             raise RuntimeError("wait for the running agent to stop first")
-        self.workshop = root
+        self.project = root
         return self.info()
 
     @property
     def agent(self) -> Path:
-        if not self.workshop:
+        if not self.project:
             raise RuntimeError("choose the ClearFirst folder first")
-        return self.workshop / "agent"
-
-    @property
-    def world(self) -> Path:
-        return self.agent.parent / "world"
+        return self.project / "agent"
 
     @property
     def runs(self) -> Path:
@@ -549,24 +545,22 @@ class Console:
         return path if path.is_absolute() else (self.agent / path).resolve()
 
     def _display_path(self, path: Path) -> str:
-        """A path relative to the workshop folder when it is inside it (cases/xyz)."""
-        if self.workshop is None:
+        """A path relative to the project folder when it is inside it (cases/xyz)."""
+        if self.project is None:
             return str(path)
         try:
-            return str(path.resolve().relative_to(self.workshop))
+            return str(path.resolve().relative_to(self.project))
         except ValueError:
             return str(path)
 
     def cases(self) -> list:
         """Every folder under cases/ with an objective.md: title, latest-run
         status ("not started" when no run belongs to it yet), and run id."""
-        folder = self.workshop / "cases" if self.workshop else None
+        folder = self.project / "cases" if self.project else None
         if not folder or not folder.is_dir():
             return []
         out = []
         for case in sorted(p for p in folder.iterdir() if p.is_dir()):
-            if case.name == "northbridge-v-caldera":
-                continue  # legacy legal demo, not a shipment
             objective = case / "objective.md"
             if not objective.is_file():
                 continue
@@ -633,10 +627,10 @@ class Console:
             cites = item.get("citations") or [] if isinstance(item, dict) else []
             doc_ids |= {c.get("document_id") for c in cites if isinstance(c, dict)}
         doc_ids = {d for d in doc_ids if d}
-        if not doc_ids or not self.workshop:
+        if not doc_ids or not self.project:
             return None
         best, best_n = None, 0
-        for folder in sorted((self.workshop / "cases").iterdir()):
+        for folder in sorted((self.project / "cases").iterdir()):
             documents = folder / "documents"
             if not documents.is_dir():
                 continue
@@ -672,11 +666,11 @@ class Console:
     SHIPMENT_SUFFIXES = {".pdf", ".jpg", ".jpeg", ".png"}
 
     def _page_renderer(self):
-        """world/utils/build_page_images.render, loaded from its file."""
+        """agent_kit.page_images.render, loaded from its file."""
         import importlib.util
 
-        path = self.world / "utils/build_page_images.py"
-        spec = importlib.util.spec_from_file_location("build_page_images", path)
+        path = self.agent / "agent_kit/page_images.py"
+        spec = importlib.util.spec_from_file_location("page_images", path)
         if spec is None or spec.loader is None:
             raise RuntimeError(f"page renderer not found: {path}")
         module = importlib.util.module_from_spec(spec)
@@ -687,11 +681,11 @@ class Console:
         """cases/<slug>/ from uploaded documents: files, objective.md, page images.
 
         files is [{filename, data}] with base64 data (JS FileReader output).
-        Selects the new shipment. Page images render with the same function the
-        world builder uses; files that fail to render are listed as warnings
+        Selects the new shipment. Page images render with agent_kit.page_images;
+        files that fail to render are listed as warnings
         instead of failing the shipment.
         """
-        if not self.workshop:
+        if not self.project:
             raise RuntimeError("choose the ClearFirst folder first")
         if self.jobs.any_running():
             raise RuntimeError("wait for the running agent to stop first")
@@ -706,7 +700,7 @@ class Console:
         if not uploads:
             raise RuntimeError("upload at least one document (PDF, JPG, PNG)")
         slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "shipment"
-        folder = self.workshop / "cases"
+        folder = self.project / "cases"
         target = folder / slug
         n = 2
         while target.exists():
@@ -751,11 +745,11 @@ class Console:
         return info
 
     def info(self) -> dict:
-        if not self.workshop:
-            return {"workshop": None, "jobs": []}
+        if not self.project:
+            return {"project": None, "jobs": []}
         env = self._env()
         return {
-            "workshop": str(self.workshop),
+            "project": str(self.project),
             "case": self._display_path(self.case_dir()),
             "cases": self.cases(),
             "verification": env.get("VERIFICATION", "off").strip().lower()
@@ -783,7 +777,7 @@ class Console:
         )
 
     def list_runs(self, case_id: str | None = None) -> list:
-        if not self.workshop or not self.runs.exists():
+        if not self.project or not self.runs.exists():
             return []
         rows = []
         for run_dir in sorted(self.runs.glob("run-*"), reverse=True):
@@ -838,15 +832,14 @@ class Console:
         for folder in (
             self.agent / "workspace/inbox/pages",
             self.case_dir() / "documents/pages",
-            self.world / "follow_up/pages",
         ):
             if (folder / name).is_file():
                 return (folder / name).read_bytes()
         raise FileNotFoundError(name)
 
     def documents(self) -> dict:
-        if not self.workshop:
-            return {"visible": [], "withheld": 0}
+        if not self.project:
+            return {"visible": []}
         inbox = self.agent / "workspace/inbox"
         visible = (
             [
@@ -858,20 +851,7 @@ class Console:
             if inbox.exists()
             else []
         )
-        names = {d["id"] for d in visible}
-        follow = self.world / "follow_up"
-        withheld = (
-            sum(
-                1
-                for p in follow.iterdir()
-                if p.is_file()
-                and p.suffix.lower() in {".pdf", ".jpg", ".png"}
-                and p.stem not in names
-            )
-            if follow.exists()
-            else 0
-        )
-        return {"visible": visible, "withheld": withheld}
+        return {"visible": visible}
 
     def describe(self) -> dict:
         out = subprocess.run(
@@ -949,17 +929,6 @@ class Console:
         if out.returncode:
             raise RuntimeError((out.stderr or out.stdout).strip()[-800:])
         return {"message": (out.stdout + out.stderr).strip()[-800:]}
-
-    def release(self) -> dict:
-        return self._cmd(
-            [
-                sys.executable,
-                str(self.world / "release.py"),
-                "--agent",
-                str(self.agent),
-            ],
-            self.agent.parent,
-        )
 
     def review(
         self, run_id: str, decision: str, notes: str, request_id: str = ""
@@ -1045,7 +1014,7 @@ class Console:
         declaration = case.get("declaration") or {}
         if declaration.get("status") != "approved" and progress.get("status") != "done":
             raise RuntimeError("only a signed-off declaration can be exported")
-        if self.workshop is None:
+        if self.project is None:
             raise RuntimeError("choose the ClearFirst folder first")
         if fmt == "pdf":
             import importlib.util
@@ -1055,7 +1024,7 @@ class Console:
                     "PDF export needs reportlab on the console's Python "
                     "(pip install reportlab)"
                 )
-        sys.path.insert(0, str(self.workshop))
+        sys.path.insert(0, str(self.project))
         try:
             if fmt == "pdf":
                 from adapters import sad_pdf
@@ -1077,13 +1046,13 @@ class Console:
                 f"sad-{run_id}.xml",
             )
         finally:
-            sys.path.remove(str(self.workshop))
+            sys.path.remove(str(self.project))
 
     def _run_objective(self, run_id: str) -> str:
         """The objective.md of the run's case (for the FICTIONAL DEMO watermark)."""
         case_id = self._run_cases().get(run_id)
         folder = (
-            (self.workshop / "cases" / case_id)
+            (self.project / "cases" / case_id)
             if case_id
             else self.case_dir()
         )
@@ -1197,8 +1166,8 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
             parts = [p for p in urlparse(self.path).path.split("/") if p]
             b = self._body()
             try:
-                if parts == ["api", "workshop"]:
-                    self._json(console.set_workshop(b.get("path", "")))
+                if parts == ["api", "project"]:
+                    self._json(console.set_project(b.get("path", "")))
                 elif parts == ["api", "case"]:
                     self._json(console.select_case(str(b.get("case", ""))))
                 elif parts == ["api", "shipments"]:
@@ -1242,8 +1211,6 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
                     and parts[3] == "branch"
                 ):
                     self._json(console.branch(parts[2]))
-                elif parts == ["api", "release"]:
-                    self._json(console.release())
                 elif parts == ["api", "reset"]:
                     self._json(console.reset())
                 else:
@@ -1259,7 +1226,7 @@ def make_handler(console: Console) -> type[BaseHTTPRequestHandler]:  # noqa: C90
 def main() -> None:
     parser = argparse.ArgumentParser(description="ClearFirst Broker Console")
     parser.add_argument(
-        "--workshop",
+        "--project",
         type=Path,
         default=None,
         help="a different ClearFirst folder (default: the one this ui/ folder is in)",
@@ -1267,17 +1234,17 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
-    workshop = args.workshop
-    if workshop is None and (DEFAULT_WORKSHOP / "agent/helper").is_file():
-        workshop = DEFAULT_WORKSHOP
-    console = Console(workshop)
+    project = args.project
+    if project is None and (DEFAULT_PROJECT / "agent/helper").is_file():
+        project = DEFAULT_PROJECT
+    console = Console(project)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(console))
     print(
         f"ClearFirst → http://{args.host}:{args.port}"
         + (
-            f"  (workshop: {console.workshop})"
-            if console.workshop
-            else "  (choose the workshop folder in the UI)"
+            f"  (project: {console.project})"
+            if console.project
+            else "  (choose the project folder in the UI)"
         )
     )
     try:
