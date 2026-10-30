@@ -46,12 +46,12 @@
     }
   ],
   "taxes": {
-    "import_duty_pct": 0.0,
+    "import_duty_pct": 20.0,
     "processing_fee_pct": 1.5,
     "au_levy_pct": 0.2,
     "ecowas_levy_pct": 0.5,
     "gnsw_fee_pct": 1.0,
-    "vat_pct": 0.0
+    "vat_pct": 15.0
   },
   "checklist": [
     {

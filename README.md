@@ -41,7 +41,7 @@ The checks live inside the tools, so the model cannot skip them:
 
 Three fictional shipments into Banjul, with documents generated to match the layout of real Gambian clearance paperwork:
 
-- **`cases/gypsum-boards-tr`** — gypsum plasterboard from Türkiye (HS 6809.19.00, 1,245 pallets, USD 21,000 CIF). Clean documents. Duty estimate GMD 48,269.76 — the real GRA notice this case was modelled on showed 48,272.
+- **`cases/gypsum-boards-tr`** — gypsum plasterboard from Türkiye (HS 6809.19.00, 1,245 pallets, USD 21,000 CIF). Clean documents: the baseline case. Duty, VAT and levies computed under the normal procedure (20% CET band, VAT 15%).
 - **`cases/ceramic-tiles-cn`** — porcelain tiles from China (HS 6907.21.00, 860 pallets, USD 17,000). The bill of lading **deliberately disagrees** with the packing list on package count (806 vs 860) and gross weight (24,080 vs 24,800 kg). The agent files both as discrepancies and the broker sees them before signing.
 
 - **`cases/rice-vn`** — long grain rice from Vietnam (HS 1006.30.00, 500 bags, 25,000 kg, USD 13,500). Weights and counts agree everywhere, but the **invoice states origin Thailand** while the certificate of origin certifies Viet Nam. Origin decides tariff treatment, so the agent must flag it rather than pick one.
