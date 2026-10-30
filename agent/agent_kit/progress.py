@@ -125,6 +125,18 @@ def load_progress(root: Path, run_id: str) -> dict:
     return json.loads(path.read_text())
 
 
+def remap_turns(root: Path, run_id: str, mapping: dict) -> None:
+    """Rewrite saved turn boundaries after messages were removed (resume drops
+    expired reasoning items, shifting every later index). Entries pointing
+    outside the map keep their index."""
+    progress = load_progress(root, run_id)
+    for entry in progress.get("turns") or []:
+        for key in ("saw", "output", "end"):
+            if isinstance(entry.get(key), int):
+                entry[key] = mapping.get(entry[key], entry[key])
+    _write(root, run_id, progress)
+
+
 def resume(root: Path, run_id: str) -> dict:
     """Continue a stopped run: apply what a person did since it stopped.
 

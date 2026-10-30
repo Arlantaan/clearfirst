@@ -847,6 +847,25 @@ class VerifiedRunTest(unittest.TestCase):
             [c["check"] for c in case["declaration_checks"]],
         )
 
+    def test_the_loop_stops_the_moment_a_declaration_files(self) -> None:
+        script = self.initial() + AFTER_RELEASE + [GOOD_DECLARATION]
+        fake = support.scripted(
+            self.root, script + [("update_plan", {"plan": ["this must never run"]})]
+        )
+        with self.passing_checklist():
+            result = self.run_agent(root=self.root, client=fake.client, turns=20)
+            support.release(self.root)
+            resumed = self.resume_run(
+                root=self.root, run_id=result["run_id"], client=fake.client, turns=10
+            )
+        self.assertEqual("awaiting_signoff", resumed["status"])
+        names = [
+            name
+            for name, _args, _out in support.tool_calls(self.root, result["run_id"])
+        ]
+        self.assertEqual([name for name, _args in script], names)
+        self.assertEqual(len(script), len(support.agent_requests(fake)))
+
     def test_three_refused_declarations_escalate_to_a_person(self) -> None:
         fake = support.scripted(
             self.root, [SAD_CHECKLIST, READ_ALL, EARLY_DECLARATION, EARLY_DECLARATION, EARLY_DECLARATION]

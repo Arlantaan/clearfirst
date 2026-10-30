@@ -471,7 +471,15 @@ function turnHtml(b) {
   const resp = items.find(it => it.ev.event_type === "model_response");
   const callIdx = items.findIndex(it => it.ev.event_type === "tool_call" && it.ev.actor === "agent");
   const call = callIdx >= 0 ? items[callIdx] : null;
-  const result = items.find(it => it.ev.event_type === "tool_result" && (it.ev.payload || {}).tool_name !== undefined);
+  let result = items.find(it => it.ev.event_type === "tool_result" && (it.ev.payload || {}).tool_name !== undefined);
+  if (!result) {
+    // A saved turn's items can miss its result when the turn's message slice is
+    // stale (older runs saved before resumes repaired turn boundaries). Match the
+    // observation by turn across all events so it still shows the real one; a
+    // genuinely in-flight turn has no result event anywhere and keeps "Running…".
+    const ev = events.find(e => e.event_type === "tool_result" && (e.payload || {}).turn === b.turn && (e.payload || {}).tool_name !== undefined);
+    if (ev) result = {ev, idx: -1};
+  }
   const saved = items.some(it => it.ev.event_type === "state_snapshot");
   let rows = "";
   const chose = call ? "Agent planning" : (resp ? "Agent planning → answered in text (no tool call); asked again" : "");

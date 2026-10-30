@@ -130,6 +130,70 @@ def _epoch(stamp: str | None) -> float:
         return 0.0
 
 
+def _turn_calls(messages: list, skip_prefix: bool = False) -> list:
+    """(call, output) per model response in order, outputs paired by call_id.
+
+    Saved saw/out/end slices go stale when a resume drops expired reasoning
+    items, so responses are segmented by order instead: every model call appends
+    exactly one response, and each turn makes exactly one model call, so the
+    k-th response is the k-th numbered turn's. A branched run also carries the
+    copied messages up to its first set_checklist answer (skip_prefix drops
+    those responses: they belong to the run it branched from).
+    """
+    responses: list[tuple] = []  # (first message index, last message index, items)
+    current: list = []
+    start = 0
+    for i, m in enumerate(messages):
+        if not isinstance(m, dict):
+            continue
+        if m.get("role") == "user" or m.get("type") == "function_call_output":
+            if current:
+                responses.append((start, i - 1, current))
+                current = []
+            continue
+        if not current:
+            start = i
+        current.append(m)
+    if current:
+        responses.append((start, len(messages) - 1, current))
+    if skip_prefix:
+        first = next(
+            (
+                m
+                for m in messages
+                if isinstance(m, dict)
+                and m.get("type") == "function_call"
+                and m.get("name") == "set_checklist"
+            ),
+            None,
+        )
+        if first is not None:
+            answered = next(
+                (
+                    i
+                    for i, m in enumerate(messages)
+                    if isinstance(m, dict)
+                    and m.get("type") == "function_call_output"
+                    and m.get("call_id") == first.get("call_id")
+                ),
+                -1,
+            )
+            responses = [r for r in responses if r[1] > answered]
+    responses = [items for _s, _e, items in responses]
+    outputs = {
+        m.get("call_id"): m
+        for m in messages
+        if isinstance(m, dict) and m.get("type") == "function_call_output"
+    }
+    pairs = []
+    for response in responses:
+        call = next(
+            (m for m in response if m.get("type") == "function_call"), None
+        )
+        pairs.append((call, outputs.get(call.get("call_id")) if call else None))
+    return pairs
+
+
 def build_events(  # noqa: C901
     progress: dict, case: dict | None, job: dict | None
 ) -> list:
@@ -139,6 +203,14 @@ def build_events(  # noqa: C901
     if not progress:
         return events
     messages = progress.get("messages") or []
+    numbered = [e for e in progress.get("turns") or [] if e.get("turn") is not None]
+    pairs = _turn_calls(
+        messages, skip_prefix=bool((progress.get("notes") or {}).get("branched_from"))
+    )
+    calls_by_turn = {
+        entry["turn"]: pairs[i] if i < len(pairs) else (None, None)
+        for i, entry in enumerate(numbered)
+    }
     case = case or {}
     requests = {r.get("id"): r for r in case.get("requests") or []}
     checks = list(case.get("checklist_checks") or [])
@@ -258,22 +330,10 @@ def build_events(  # noqa: C901
                 input_tokens=entry.get("input_tokens", 0),
                 output_tokens=entry.get("output_tokens", 0),
             )
-            call = next(
-                (m for m in messages[saw:out] if m.get("type") == "function_call"),
-                None,
-            )
+            call, output = calls_by_turn.get(n, (None, None))
             if call is not None:
                 name, args = call.get("name", ""), _parse(call.get("arguments") or "{}")
                 add("tool_call", "agent", stamp, turn=n, tool_name=name, arguments=args)
-                output = next(
-                    (
-                        m
-                        for m in messages[out:end]
-                        if m.get("type") == "function_call_output"
-                        and m.get("call_id") == call.get("call_id")
-                    ),
-                    None,
-                )
                 if output is not None:
                     result = _parse(output.get("output"))
                     add(

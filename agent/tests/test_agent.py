@@ -139,6 +139,49 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(42, len(support.agent_requests(fake)))
         self.assertIn("last turn", str(support.agent_requests(fake)[-1]["input"]))
 
+    def test_resume_drops_reasoning_without_breaking_turn_slices(self) -> None:
+        fake = support.scripted(self.root, [PLAN, LIST])
+        original = fake.responder
+
+        def with_reasoning(kind, payload):
+            answer = original(kind, payload)
+            if isinstance(answer.get("output"), list) and answer["output"]:
+                answer["output"] = [
+                    {
+                        "type": "reasoning",
+                        "id": "rs-test",
+                        "summary": [],
+                        "status": "completed",
+                    }
+                ] + answer["output"]
+            return answer
+
+        fake.responder = with_reasoning
+        result = run_agent(root=self.root, client=fake.client, turns=1)
+        self.assertEqual("paused", result["status"])
+        resume_run(root=self.root, run_id=result["run_id"], client=fake.client, turns=1)
+        progress = support.progress(self.root, result["run_id"])
+        messages = progress["messages"]
+        self.assertEqual(
+            1, sum(1 for m in messages if m.get("type") == "reasoning")
+        )
+        for entry in progress["turns"]:
+            if entry.get("turn") is None:
+                continue
+            calls = [
+                m
+                for m in messages[entry["saw"] : entry["output"]]
+                if m.get("type") == "function_call"
+            ]
+            self.assertEqual(1, len(calls))
+            outputs = [
+                m
+                for m in messages[entry["output"] : entry["end"]]
+                if m.get("type") == "function_call_output"
+                and m.get("call_id") == calls[0]["call_id"]
+            ]
+            self.assertEqual(1, len(outputs))
+
     def test_an_answered_run_has_nothing_to_resume(self) -> None:
         fake = support.scripted(self.root, [DECLARATION])
         result = run_agent(root=self.root, client=fake.client, turns=5)

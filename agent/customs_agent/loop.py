@@ -35,6 +35,7 @@ def resume_run(*, root: Path, run_id: str, client: OpenAI, turns: int = 15) -> d
             "note": step.get("note", ""),
         }
     instructions = (Path(__file__).resolve().parent / "system_instructions.md").read_text()
+    progress.remap_turns(root, run_id, _removal_map(saved["messages"]))
     messages: list = _without_reasoning(saved["messages"]) + [
         {"role": "user", "content": step["message"]}
     ]
@@ -48,6 +49,21 @@ def _without_reasoning(messages: list) -> list:
     Never drops function_call or function_call_output items: tool history stays.
     """
     return [m for m in messages if _field(m, "type") != "reasoning"]
+
+
+def _removal_map(messages: list) -> dict:
+    """Old message-boundary index -> new index once reasoning items are dropped.
+
+    Saved turns point at message slices (saw/output/end); dropping reasoning on
+    resume shifts everything after each dropped item, so the boundaries move too.
+    """
+    mapping, shift = {}, 0
+    for i, m in enumerate(messages):
+        mapping[i] = i - shift
+        if _field(m, "type") == "reasoning":
+            shift += 1
+    mapping[len(messages)] = len(messages) - shift
+    return mapping
 
 
 def _is_expired_reasoning(error: Exception) -> bool:
