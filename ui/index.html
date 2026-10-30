@@ -148,7 +148,7 @@ const BTN_O_SM = "bg-white hover:bg-slate-50 border border-slate-300 text-sm fon
 const SECT = "text-xs font-semibold uppercase tracking-wide text-slate-500";
 const INPUT = "border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500";
 const AREA = INPUT + " w-full min-h-[52px]";
-const TONE = {"not started":"bg-slate-100 text-slate-600","running":"bg-sky-100 text-sky-700","needs broker":"bg-amber-100 text-amber-700","awaiting sign-off":"bg-amber-100 text-amber-700","done":"bg-emerald-100 text-emerald-700","needs_input":"bg-amber-100 text-amber-700","awaiting_signoff":"bg-amber-100 text-amber-700","paused":"bg-slate-100 text-slate-600","answered":"bg-slate-100 text-slate-600","approved":"bg-emerald-100 text-emerald-700","proven":"bg-emerald-100 text-emerald-700","consistent":"bg-emerald-100 text-emerald-700","open":"bg-slate-100 text-slate-600","rejected":"bg-red-100 text-red-700","error":"bg-red-100 text-red-700","escalated":"bg-amber-100 text-amber-700","unverified":"bg-amber-100 text-amber-700"};
+const TONE = {"not started":"bg-slate-100 text-slate-600","running":"bg-sky-100 text-sky-700","needs broker":"bg-amber-100 text-amber-700","awaiting sign-off":"bg-amber-100 text-amber-700","done":"bg-emerald-100 text-emerald-700","needs_input":"bg-amber-100 text-amber-700","awaiting_signoff":"bg-amber-100 text-amber-700","paused":"bg-slate-100 text-slate-600","answered":"bg-slate-100 text-slate-600","approved":"bg-emerald-100 text-emerald-700","proven":"bg-emerald-100 text-emerald-700","evidenced":"bg-sky-100 text-sky-700","consistent":"bg-emerald-100 text-emerald-700","open":"bg-slate-100 text-slate-600","rejected":"bg-red-100 text-red-700","error":"bg-red-100 text-red-700","escalated":"bg-amber-100 text-amber-700","unverified":"bg-amber-100 text-amber-700"};
 const chip = (label, tone) => `<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${tone || TONE[label] || TONE.open}"><span class="h-1.5 w-1.5 rounded-full bg-current shrink-0"></span>${esc(label)}</span>`;
 const SVG_WARN = `<svg class="h-5 w-5 flex-none" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.72-1.36 3.485 0l5.518 9.82c.75 1.334-.213 2.98-1.742 2.98H4.48c-1.53 0-2.493-1.646-1.743-2.98l5.52-9.82zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`;
 const SVG_DL = `<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>`;
@@ -658,8 +658,11 @@ function zoomPage(doc, page, boxesJson) {
 function renderSide() {
   const d = detail, st = d.state || {}, cs = d.case || {};
   const ck = cs.checklist || {};
-  const ids = Object.keys(ck); const proven = ids.filter(i => ck[i].status === "proven").length;
-  $("ckcount").textContent = ids.length ? `${proven}/${ids.length} proven` : "";
+  const filed = !!cs.declaration;
+  const shown = s => (s === "proven" && !filed ? "evidenced" : s);
+  const ids = Object.keys(ck);
+  const nShown = want => ids.filter(i => shown(ck[i].status) === want).length;
+  $("ckcount").textContent = ids.length ? (filed ? `${nShown("proven")}/${ids.length} proven` : `${nShown("evidenced")}/${ids.length} evidenced`) : "";
   const ckChecks = cs.checklist_checks || [], lastCk = ckChecks[ckChecks.length - 1];
   const cov = !lastCk ? "" : lastCk.passed
     ? `<div class="text-xs rounded-lg px-2 py-1.5 mb-2 bg-emerald-50 text-emerald-700">✓ Ground-truth coverage ${pct(lastCk.score)}${ckChecks.length > 1 ? ` (after ${ckChecks.length - 1} refused draft${ckChecks.length > 2 ? "s" : ""})` : ""}</div>`
@@ -672,7 +675,7 @@ function renderSide() {
       e.needs_signature_check ? chip(`signature check${sigFor(i).length ? ": " + sigFor(i).map(c => c.verdict).join(", ") : ""}`, TONE.awaiting_signoff) : "",
       e.request ? chip(`request ${e.request}`, TONE.escalated) : "",
     ].join("");
-    return `<div class="item border-t border-slate-200 py-2 first:border-t-0" data-item="${esc(i)}"><div class="flex justify-between items-center gap-1.5 font-semibold text-[13px]"><span>${esc(itemLabel(i))}</span><span>${chip(e.status)}</span></div>
+    return `<div class="item border-t border-slate-200 py-2 first:border-t-0" data-item="${esc(i)}"><div class="flex justify-between items-center gap-1.5 font-semibold text-[13px]"><span>${esc(itemLabel(i))}</span><span>${chip(shown(e.status))}</span></div>
       ${e.question ? `<div class="text-xs mt-0.5">${esc(e.question)}</div>` : ""}${e.evidence_needed ? `<div class="text-[11px] text-slate-500 mt-px">Settled by: ${esc(e.evidence_needed)}</div>` : ""}
       ${tags ? `<div class="flex gap-1 flex-wrap mt-1">${tags}</div>` : ""}${factsFor(cs, i).map(citeHtml).join("")}</div>`;
   }).join("") : cov + `<div class="muted small">No checklist yet. The agent drafts it first (set_checklist).</div>`);

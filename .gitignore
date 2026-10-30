@@ -5,3 +5,6 @@
 workspace/
 .DS_Store
 *.env.txt
+
+# local tests on real documents, never committed
+cases/bindazzz/

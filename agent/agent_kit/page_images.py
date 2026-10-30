@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 DPI = 100
@@ -51,7 +52,7 @@ def render(doc: Path, out_dir: Path) -> int:
     (out_dir / f"{stem}-p1.png").write_bytes(
         subprocess.run(
             [
-                "python3",
+                sys.executable,
                 "-c",
                 "import sys;from PIL import Image;im=Image.open(sys.argv[1]).convert('L');im.thumbnail((1100,1100));im.save(sys.stdout.buffer,'PNG')",
                 str(doc),
