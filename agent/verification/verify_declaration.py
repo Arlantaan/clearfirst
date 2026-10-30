@@ -146,10 +146,10 @@ def run_verification(ctx, declaration: dict) -> dict:
                 f"{item_id} is proven but no document backing its facts was checked."
             )
         for check in checks:
-            if check.get("verdict") != "consistent":
+            if check.get("verdict") == "inconsistent":
                 problems.append(
                     f"{check.get('document_id')} p{check.get('page')} signature is "
-                    f"{check.get('verdict')}, so {item_id} is not proven."
+                    f"inconsistent, so {item_id} is not proven."
                 )
 
     # Rule 4: key values quoted in facts from at least two documents.

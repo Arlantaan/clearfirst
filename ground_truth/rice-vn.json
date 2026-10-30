@@ -1,0 +1,104 @@
+{
+  "case": "rice-vn",
+  "declaration_type": "IM 4",
+  "procedure_code": "4000",
+  "customs_office": "GMBJL - Banjul Seaport",
+  "declarant_code": "DEC-0417",
+  "importer": {
+    "name": "Bakau Food Importers Ltd",
+    "tin": "2017-GM-2210"
+  },
+  "exporter": {
+    "name": "Mekong Delta Grain Export JSC",
+    "country": "VN"
+  },
+  "transport": {
+    "mode": "1 - Sea",
+    "vessel": "MERIDIAN DANUBE / 114W",
+    "bl_number": "MERU7721003981",
+    "container": "MRKU 442 018-3",
+    "port_of_loading": "Ho Chi Minh City (Cat Lai), Vietnam",
+    "port_of_discharge": "Banjul, The Gambia",
+    "arrival_date": "2026-09-12"
+  },
+  "valuation": {
+    "incoterm": "CIF",
+    "delivery_place": "Banjul",
+    "currency": "USD",
+    "invoice_total": 13500.0,
+    "exchange_rate_gmd_per_usd": 71.83,
+    "customs_value_gmd": 969705.0
+  },
+  "items": [
+    {
+      "line": 1,
+      "description": "Long grain white rice, 5% broken, in 50 kg PP bags",
+      "hs_code": "1006.30.00",
+      "origin": "VN",
+      "packages": 500,
+      "package_kind": "BG - Bag",
+      "gross_kg": 25250,
+      "net_kg": 25000,
+      "supplementary_qty": 25000,
+      "supplementary_unit": "kg",
+      "item_value_usd": 13500.0,
+      "statistical_value_gmd": 969705.0
+    }
+  ],
+  "taxes": {
+    "import_duty_pct": 10.0,
+    "processing_fee_pct": 1.5,
+    "au_levy_pct": 0.2,
+    "ecowas_levy_pct": 0.5,
+    "gnsw_fee_pct": 1.0,
+    "vat_pct": 0.0
+  },
+  "expected_discrepancies": [
+    {
+      "field": "origin",
+      "documents": [
+        "INV-MDG-2026-0458",
+        "COO-VN-2026-071133",
+        "BL-MERU7721003981"
+      ],
+      "detail": "Invoice states country of origin Thailand (TH); certificate of origin certifies Viet Nam and the B/L shows the shipper in Vietnam"
+    }
+  ],
+  "checklist": [
+    {
+      "item": "importer_identity",
+      "question": "Who is the importer and what is their TIN?",
+      "settled_by": "Invoice sold-to and B/L consignee agree"
+    },
+    {
+      "item": "exporter_and_origin",
+      "question": "Who is the exporter and what is the country of origin?",
+      "settled_by": "Certificate of origin governs origin (Viet Nam); invoice origin line contradicts it and must be flagged"
+    },
+    {
+      "item": "goods_description_and_hs",
+      "question": "What are the goods and what HS code applies?",
+      "settled_by": "Invoice description; HS 1006.30 for semi-milled or wholly milled rice"
+    },
+    {
+      "item": "quantities",
+      "question": "How many packages, boards, and what gross and net weight?",
+      "settled_by": "Packing list; B/L gross weight must agree"
+    },
+    {
+      "item": "customs_value",
+      "question": "What is the invoice total, currency and incoterm, and the customs value in GMD?",
+      "settled_by": "Invoice total CIF Banjul x exchange rate"
+    },
+    {
+      "item": "transport_details",
+      "question": "Vessel, B/L number, container, ports?",
+      "settled_by": "Bill of lading"
+    },
+    {
+      "item": "cross_document_consistency",
+      "question": "Do weights, package counts, references and parties agree across all documents?",
+      "settled_by": "Comparison of invoice, packing list, B/L, CoO. Expected discrepancy: the invoice says origin Thailand while the certificate of origin certifies Viet Nam; weights and counts agree"
+    }
+  ]
+}

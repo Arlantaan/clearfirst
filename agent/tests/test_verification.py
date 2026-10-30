@@ -514,6 +514,23 @@ class DeclarationRulesTest(unittest.TestCase):
         )
         self.assertEqual("signature", self.case.data["flags"][0]["kind"])
 
+    def test_other_signature_verdicts_flag_without_blocking(self) -> None:
+        declaration = self.signature_declaration()
+        self.case.add_signature_check(
+            {
+                "document_id": "DOC-CERT",
+                "page": 1,
+                "signer": "Dana Okafor",
+                "verdict": "no_signature_found",
+                "reason": "SAM found no signature or stamp",
+            }
+        )
+        found = self.problems(declaration)
+        self.assertFalse(
+            [p for p in found if "was checked" in p or "is not proven" in p]
+        )
+        self.assertEqual("signature", self.case.data["flags"][0]["kind"])
+
     def test_excluded_documents_are_never_cited(self) -> None:
         self.read(["DOC-DECLARATION"])
         self.fact("importer", "DOC-DECLARATION", self.WORK)
