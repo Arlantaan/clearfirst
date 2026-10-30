@@ -80,6 +80,7 @@ class ScriptedModel:
         sam_outputs: dict | None = None,
         evidence: Callable[[str, list], list] | None = None,
         unsupported: Callable[[str], list] | None = None,
+        verdict: Callable[[str], dict] | None = None,
         feedback: str = FEEDBACK,
     ) -> None:
         self.transcripts = transcripts
@@ -87,6 +88,9 @@ class ScriptedModel:
         self.sam_outputs = sam_outputs or {}
         self.evidence = evidence or default_evidence
         self.unsupported = unsupported or (lambda text: [])
+        self.verdict = verdict or (
+            lambda text: {"consistent": True, "confidence": 0.9, "reason": "scripted"}
+        )
         self.feedback = feedback
         self.n = 0
 
@@ -121,6 +125,11 @@ class ScriptedModel:
             return {
                 "output_text": json.dumps({"unsupported": self.unsupported(text)}),
                 "usage": {"input_tokens": 1800, "output_tokens": 60},
+            }
+        if "SIGNATURE VERDICT" in text:
+            return {
+                "output_text": json.dumps(self.verdict(text)),
+                "usage": {"input_tokens": 2500, "output_tokens": 80},
             }
         match = DOC_ID.search(text)
         doc = match.group(1) if match else ""

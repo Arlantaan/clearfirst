@@ -402,7 +402,12 @@ class CaseRecord:
     def add_signature_check(self, result: dict) -> dict:
         record = dict(result, at=now())
         self.data["signature_checks"].append(record)
-        if result.get("verdict") in ("inconsistent", "unclear", "unsigned"):
+        if result.get("verdict") in (
+            "inconsistent",
+            "unclear",
+            "unsigned",
+            "no_signature_found",
+        ):
             self.data["flags"].append(
                 {
                     "kind": "signature",

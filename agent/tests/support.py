@@ -232,10 +232,11 @@ def transcripts() -> dict:
     }
 
 
-def scripted(root: Path, actions: list, unsupported=None) -> Scripted:
+def scripted(root: Path, actions: list, unsupported=None, verdict=None) -> Scripted:
     """A scripted OpenAI client (fake.client) that plays `actions` (name, args) in order, one per agent turn.
 
     unsupported(text) -> list: what the claims check reports (default: every claim supported).
+    verdict(text) -> dict: what the signature judge reports (default: consistent).
     """
     sam_outputs = {}
     box = "<0f>0<|box;x1=10;y1=20;x2=110;y2=60;w=850;h=1100|><|mask;x=0;y=0;data=100,40,~x|>"
@@ -249,7 +250,9 @@ def scripted(root: Path, actions: list, unsupported=None) -> Scripted:
         return queue.pop(0) if queue else None
 
     return Scripted(
-        ScriptedModel(transcripts(), planner, sam_outputs, unsupported=unsupported)
+        ScriptedModel(
+            transcripts(), planner, sam_outputs, unsupported=unsupported, verdict=verdict
+        )
     )
 
 

@@ -11,6 +11,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from PIL import Image
+
 from agent_kit import case_record, document_text, tools
 from agent_kit.case_record import CaseError, CaseRecord
 from agent_kit.progress import load_progress, new_run, resume, save_progress
@@ -395,20 +397,66 @@ class KitTest(unittest.TestCase):
             ("not implemented yet", "paused"), (result["error"], result["status"])
         )
 
-    def test_check_signatures_is_a_placeholder_that_names_its_reference(self) -> None:
+    def test_check_signatures_segments_crops_and_records_the_verdict(self) -> None:
         run_id = new_run(self.root, instructions="i", objective="o", verification=True)
         args = {"document_id": "DOC-REF", "page": 1, "signer": "Dana Okafor"}
         same = dict(args, reference_document_id="DOC-REF", reference_page=1)
         self.assertIn(
             "different page", self.tool("check_signatures", same, run_id)["error"]
         )
-        other = dict(args, reference_document_id="DOC-DECLARATION", reference_page=1)
+        support.release(self.root)
+        pages = self.root / "workspace/inbox/pages"
+        for doc_id in ("DOC-REF", "DOC-CERT"):
+            Image.new("RGB", (200, 120), "white").save(pages / f"{doc_id}-p1.png")
+        seen = {}
+
+        def verdict(text: str) -> dict:
+            seen["text"] = text
+            return {"consistent": True, "confidence": 0.8, "reason": "same slant"}
+
+        self.fake = support.scripted(self.root, [], verdict=verdict)
+        self.client = self.fake.client
+        other = dict(args, reference_document_id="DOC-CERT", reference_page=1)
         result = self.tool("check_signatures", other, run_id)
         self.assertEqual("consistent", result["verdict"])
-        check = CaseRecord(self.root, run_id).data["signature_checks"][0]
+        self.assertEqual(0.8, result["confidence"])
+        self.assertIn("Dana Okafor", seen["text"])
+        self.assertIn("DOC-REF", seen["text"])
+        self.assertIn("DOC-CERT", seen["text"])
         self.assertEqual(
-            {"document_id": "DOC-DECLARATION", "page": 1, "boxes": []}, check["reference"]
+            ["segment", "segment", "respond"], [kind for kind, _ in self.fake.calls]
         )
+        record = CaseRecord(self.root, run_id)
+        check = record.data["signature_checks"][0]
+        self.assertEqual(0.8, check["confidence"])
+        self.assertTrue(check["boxes"])
+        self.assertTrue(check["reference"]["boxes"])
+        self.assertEqual([], record.data["flags"])
+        self.fake = support.scripted(
+            self.root,
+            [],
+            verdict=lambda text: {
+                "consistent": True,
+                "confidence": 0.2,
+                "reason": "blurry",
+            },
+        )
+        self.client = self.fake.client
+        result = self.tool("check_signatures", other, run_id)
+        self.assertEqual("inconsistent", result["verdict"])
+        flags = CaseRecord(self.root, run_id).data["flags"]
+        self.assertEqual(1, len(flags))
+        self.assertEqual("signature", flags[0]["kind"])
+        self.assertTrue(flags[0]["reason"].startswith("inconsistent"))
+        result = self.tool(
+            "check_signatures",
+            dict(args, reference_document_id="DOC-DECLARATION", reference_page=1),
+            run_id,
+        )
+        self.assertEqual("no_signature_found", result["verdict"])
+        flags = CaseRecord(self.root, run_id).data["flags"]
+        self.assertEqual(2, len(flags))
+        self.assertTrue(flags[1]["reason"].startswith("no_signature_found"))
 
     # ---- pre-built checks ------------------------------------------------------------
     def ctx(self) -> tools.Context:
