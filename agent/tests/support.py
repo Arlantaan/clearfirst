@@ -32,10 +32,12 @@ INITIAL = {
 }
 FOLLOW_UP = {
     "DOC-DRAFT": [
-        "Draft readiness assessment dated December 19. Recommendation: NO-GO. Nine of fourteen criteria not met."
+        "Draft readiness assessment dated December 19. Recommendation: NO-GO. Nine of fourteen criteria not met. "
+        "Total gross weight 4,700 kg."
     ],
     "DOC-CERT": [
-        "UAT Phase 2 exit certification. I certify that all exit criteria have been satisfied. D. Okafor."
+        "UAT Phase 2 exit certification. I certify that all exit criteria have been satisfied. D. Okafor. "
+        "Packing detail: gross 2,000 kg and 2,700 kg per line."
     ],
 }
 def _page_png(seed: int) -> bytes:

@@ -71,10 +71,15 @@ def _duty_rows(declaration: dict) -> list:
     lines = []
     for levy in levies:
         rate = levy.get("rate_pct")
+        tag = ""
+        if levy.get("line") is not None:
+            tag = f" line {levy.get('line')}"
+            if levy.get("hs"):
+                tag += f" (HS {text(levy.get('hs'))})"
         prefix = (
-            f"{text(levy.get('code'))} {_pct(rate)}%: "
+            f"{text(levy.get('code'))} {_pct(rate)}%{tag}: "
             if isinstance(rate, (int, float))
-            else f"{text(levy.get('code'))}: "
+            else f"{text(levy.get('code'))}{tag}: "
         )
         lines.append(f"{prefix}GMD {money(levy.get('amount'))}")
     if total is not None:

@@ -437,6 +437,46 @@ class DeclarationRulesTest(unittest.TestCase):
             self.problems(declaration),
         )
 
+    def _two_item_weights(self):
+        item1 = support.cited_declaration()["items"][0]
+        item1["gross_kg"] = 2000
+        item1["item_value"] = 5000
+        item1["citations"] = [self.citation("DOC-CERT", "gross 2,000 kg")]
+        item2 = support.cited_declaration()["items"][0]
+        item2["gross_kg"] = 2700
+        item2["item_value"] = 5000
+        item2["citations"] = [self.citation("DOC-CERT", "2,700 kg per line")]
+        named = ["valuation.invoice_total", "importer.name", "exporter.name"]
+        for i in (0, 1):
+            named += [f"items[{i}].net_kg", f"items[{i}].packages", f"items[{i}].hs_code"]
+        return {
+            "header": support.header_values(),
+            "items": [item1, item2],
+            "discrepancies": [],
+            "open_questions": named,
+        }
+
+    def test_multi_item_weights_accept_a_total_on_a_second_document(self) -> None:
+        support.release(self.root)
+        self.read(["DOC-CERT", "DOC-DRAFT"])
+        self.fact("packages_weights", "DOC-CERT", "gross 2,000 kg")
+        self.fact("packages_weights", "DOC-CERT", "2,700 kg per line")
+        self.fact("consistency", "DOC-DRAFT", "Total gross weight 4,700 kg")
+        found = self.problems(self._two_item_weights())
+        self.assertFalse([p for p in found if "items[]." in p])
+
+    def test_multi_item_weights_fail_without_a_second_document_total(self) -> None:
+        support.release(self.root)
+        self.read(["DOC-CERT"])
+        self.fact("packages_weights", "DOC-CERT", "gross 2,000 kg")
+        self.fact("packages_weights", "DOC-CERT", "2,700 kg per line")
+        found = self.problems(self._two_item_weights())
+        self.assertIn(
+            "items[].gross_kg: per-line values from one document and no "
+            "second document quotes the total 4,700",
+            found,
+        )
+
     def signature_declaration(self) -> dict:
         support.release(self.root)
         self.read(["DOC-CERT"])

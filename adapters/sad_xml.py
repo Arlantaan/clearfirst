@@ -77,13 +77,16 @@ def render(declaration: dict) -> bytes:
         for levy in estimate["levies"]:
             if not isinstance(levy, dict):
                 continue
-            ET.SubElement(
-                tax_el,
-                "line",
-                code=text(levy.get("code")),
-                name=text(levy.get("name")),
-                rate=text(levy.get("rate_pct")),
-            ).text = money(levy.get("amount"))
+            attrs = {
+                "code": text(levy.get("code")),
+                "name": text(levy.get("name")),
+                "rate": text(levy.get("rate_pct")),
+            }
+            if levy.get("line") is not None:
+                attrs["item_line"] = str(levy.get("line"))
+            if levy.get("hs"):
+                attrs["hs"] = text(levy.get("hs"))
+            ET.SubElement(tax_el, "line", **attrs).text = money(levy.get("amount"))
         ET.SubElement(tax_el, "total").text = money(estimate.get("total_payable_gmd"))
 
     discs = ET.SubElement(sad, "discrepancies")

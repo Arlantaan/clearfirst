@@ -765,6 +765,118 @@ class TariffToolsTest(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertEqual(1515613.0, result["customs_value_gmd"])
 
+    def test_compute_duty_with_items_computes_per_line_rates(self) -> None:
+        self._record_invoice_fact()
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {
+                    "currency": "USD",
+                    "invoice_total": 21000,
+                    "items": [
+                        {"hs_code": "6809.19.00", "value": 10000},
+                        {"hs_code": "1006.30", "value": 11000},
+                    ],
+                },
+            ),
+        )
+        self.assertNotIn("error", result)
+        lines = result["lines"]
+        self.assertEqual(
+            [1, 2], [row["line"] for row in lines]
+        )
+        self.assertEqual(
+            (718300.0, 143660.0, 129294.0),
+            (
+                lines[0]["customs_value_gmd"],
+                lines[0]["duty_gmd"],
+                lines[0]["vat_gmd"],
+            ),
+        )
+        self.assertEqual(
+            (790130.0, 79013.0, 0.0),
+            (
+                lines[1]["customs_value_gmd"],
+                lines[1]["duty_gmd"],
+                lines[1]["vat_gmd"],
+            ),
+        )
+        levies = result["levies"]
+        self.assertEqual(
+            ["IDF", "IDF", "PRF", "AUL", "ECL", "GNSW", "VAT", "VAT"],
+            [levy["code"] for levy in levies],
+        )
+        self.assertEqual(
+            [(1, "6809.19"), (2, "1006.30")],
+            [(levy["line"], levy["hs"]) for levy in levies if "line" in levy][0:2],
+        )
+        self.assertNotIn("line", levies[2])
+        self.assertEqual(22626.45, levies[2]["amount"])
+        self.assertEqual(129294.0, result["vat_gmd"])
+        self.assertEqual(400236.76, result["total_payable_gmd"])
+        self.assertEqual(
+            result["total_payable_gmd"],
+            round(sum(levy["amount"] for levy in levies), 2),
+        )
+
+    def test_compute_duty_with_items_refuses_a_mismatched_total(self) -> None:
+        self._record_invoice_fact()
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {
+                    "currency": "USD",
+                    "invoice_total": 21000,
+                    "items": [
+                        {"hs_code": "6809.19.00", "value": 10000},
+                        {"hs_code": "1006.30", "value": 10000},
+                    ],
+                },
+            ),
+        )
+        self.assertEqual(
+            "item values sum to 20000 but invoice_total is 21000",
+            result["error"],
+        )
+
+    def test_compute_duty_with_items_validates_each_line(self) -> None:
+        self._record_invoice_fact()
+
+        def duty(items):
+            return tools.run(
+                self.client,
+                self.root,
+                self.run_id,
+                call(
+                    "compute_duty",
+                    {"currency": "USD", "invoice_total": 21000, "items": items},
+                ),
+            )
+
+        self.assertEqual(
+            "items must be a non-empty list of {hs_code, value}",
+            duty([])["error"],
+        )
+        self.assertEqual(
+            "items[1].value must be a positive number",
+            duty(
+                [
+                    {"hs_code": "6809.19.00", "value": 21000},
+                    {"hs_code": "1006.30", "value": 0},
+                ]
+            )["error"],
+        )
+        self.assertIn(
+            "is not in pack",
+            duty([{"hs_code": "9999.99", "value": 21000}])["error"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

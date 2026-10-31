@@ -17,7 +17,9 @@ Rules:
    (keywords in the item's question); broker-declared fields take no citation.
 4. gross_kg, net_kg, packages, hs_code, importer.name and exporter.name are quoted
    in recorded facts from at least two documents, unless named in
-   discrepancies/open_questions.
+   discrepancies/open_questions. For multi-item declarations, per-line
+   gross_kg, net_kg and packages quoted on one document are accepted when the
+   field total is quoted on a different document.
 5. Nothing excluded is cited; a proven signature item has a consistent signature
    check on a document backing one of its recorded facts.
 6. Header values are sane (positive totals, HS shape, 2-letter codes, net <= gross,
@@ -153,11 +155,14 @@ def run_verification(ctx, declaration: dict) -> dict:
                 )
 
     # Rule 4: key values quoted in facts from at least two documents.
+    dict_items = [item for item in items if isinstance(item, dict)]
+    multi = len(dict_items) > 1
+    line_fields = ("hs_code",) if multi else ("gross_kg", "net_kg", "packages", "hs_code")
     targets = []
     for index, item in enumerate(items):
         if not isinstance(item, dict):
             continue
-        for field in ("gross_kg", "net_kg", "packages", "hs_code"):
+        for field in line_fields:
             targets.append((f"items[{index}].{field}", item.get(field), True))
     targets.append(("importer.name", _at(header, "importer.name"), False))
     targets.append(("exporter.name", _at(header, "exporter.name"), False))
@@ -185,6 +190,59 @@ def run_verification(ctx, declaration: dict) -> dict:
         if len(docs) < 2:
             problems.append(f"{label} is supported by only one document.")
 
+    # Rule 4, multi-item weights/packages: per-line values quoted on one
+    # document are accepted when the field total is quoted on another.
+    if multi:
+        lined = [(i, item) for i, item in enumerate(items) if isinstance(item, dict)]
+        for field in ("gross_kg", "net_kg", "packages"):
+            unnamed = [
+                (i, item)
+                for i, item in lined
+                if not named(f"items[{i}].{field}")
+            ]
+            if not unnamed:
+                continue
+            numbers = [_as_number(item.get(field)) for _, item in lined]
+            if any(n is None for n in numbers):
+                # Rule 6 flags the bad values; rule 4 keeps the per-line shape.
+                for i, item in unnamed:
+                    number = _as_number(item.get(field))
+                    if number is None:
+                        continue
+                    docs = {
+                        f["document_id"]
+                        for f in facts
+                        if _quote_has_number(f.get("quote", ""), number)
+                    }
+                    if len(docs) < 2:
+                        problems.append(
+                            f"items[{i}].{field} is supported by only one document."
+                        )
+                continue
+            docs_of = {
+                i: {
+                    f["document_id"]
+                    for f in facts
+                    if _quote_has_number(f.get("quote", ""), number)
+                }
+                for (i, _), number in zip(lined, numbers)
+            }
+            failing = [i for i, _ in unnamed if len(docs_of[i]) < 2]
+            if not failing:
+                continue
+            total = sum(numbers)
+            failing_docs = set().union(*(docs_of[i] for i in failing))
+            corroborated = all(docs_of[i] for i in failing) and any(
+                f.get("document_id") not in failing_docs
+                and _quote_has_total(f.get("quote", ""), total)
+                for f in facts
+            )
+            if not corroborated:
+                problems.append(
+                    f"items[].{field}: per-line values from one document and no "
+                    f"second document quotes the total {_format_total(total)}"
+                )
+
     # Rule 6: header value sanity.
     raw_total = _at(header, "valuation.invoice_total")
     total = _as_number(raw_total)
@@ -197,7 +255,6 @@ def run_verification(ctx, declaration: dict) -> dict:
         problems.append("exporter.country is missing.")
     elif not isinstance(country, str) or not COUNTRY.match(country.strip()):
         problems.append("exporter.country must be a 2-letter code.")
-    dict_items = [item for item in items if isinstance(item, dict)]
     values = []
     for index, item in enumerate(items):
         if not isinstance(item, dict):
@@ -308,3 +365,19 @@ def _quote_has_number(quote: str, number: float) -> bool:
         except ValueError:
             continue
     return False
+
+
+def _quote_has_total(quote: str, total: float) -> bool:
+    """A numeric token in the quote equals the total within 0.5%."""
+    for token in _NUMBER.findall(str(quote or "")):
+        try:
+            if abs(float(token.replace(",", "")) - total) <= abs(total) * 0.005:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _format_total(total: float) -> str:
+    """4,700 — thousands separators, decimals only when needed."""
+    return f"{int(total):,}" if float(total).is_integer() else f"{total:,}"

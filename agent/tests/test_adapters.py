@@ -56,5 +56,64 @@ class ExportTest(unittest.TestCase):
             asycuda_stub.build_asycuda_payload(DECLARATION)
 
 
+class MultiLineDutyTest(unittest.TestCase):
+    """Per-line duty rows in the PDF and XML for a multi-line estimate."""
+
+    def estimate(self) -> dict:
+        from types import SimpleNamespace
+
+        from agent_kit.tools import compute_duty
+
+        ctx = SimpleNamespace(
+            root=ROOT / "agent",
+            case=SimpleNamespace(data={"facts": [{"quote": "total USD 21,000"}]}),
+        )
+        return compute_duty.run(
+            ctx,
+            {
+                "currency": "USD",
+                "invoice_total": 21000,
+                "items": [
+                    {"hs_code": "6809.19.00", "value": 10000},
+                    {"hs_code": "1006.30", "value": 11000},
+                ],
+            },
+        )
+
+    def test_pdf_duty_box_names_each_line(self) -> None:
+        declaration = {
+            "header": {},
+            "items": [],
+            "discrepancies": [],
+            "open_questions": [],
+            "duty_estimate": self.estimate(),
+        }
+        taxes = dict(
+            (box, value) for box, _, value in sad_pdf._duty_rows(declaration)
+        )["47"]
+        self.assertIn("IDF 20% line 1 (HS 6809.19)", taxes)
+        self.assertIn("VAT 0% line 2 (HS 1006.30)", taxes)
+        self.assertIn("PRF 1.5%:", taxes)
+        pdf = sad_pdf.render(declaration, "")
+        self.assertTrue(pdf.startswith(b"%PDF"))
+
+    def test_xml_tax_lines_carry_item_lines(self) -> None:
+        declaration = {
+            "header": {},
+            "items": [],
+            "discrepancies": [],
+            "open_questions": [],
+            "duty_estimate": self.estimate(),
+        }
+        root = ElementTree.fromstring(sad_xml.render(declaration))
+        lines = root.findall("./tax/line")
+        first = [line for line in lines if line.get("code") == "IDF"][0]
+        self.assertEqual(
+            ("1", "6809.19"), (first.get("item_line"), first.get("hs"))
+        )
+        fixed = [line for line in lines if line.get("code") == "PRF"][0]
+        self.assertIsNone(fixed.get("item_line"))
+
+
 if __name__ == "__main__":
     unittest.main()
