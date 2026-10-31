@@ -407,6 +407,17 @@ class DeclarationRulesTest(unittest.TestCase):
             "header importer.tin cites a fact from unrelated item consistency.", found
         )
 
+    def test_relevance_passes_when_any_matching_fact_is_relevant(self) -> None:
+        self.read(["DOC-MINUTES"])
+        self.fact("consistency", "DOC-MINUTES", self.READY)
+        self.fact("transport", "DOC-MINUTES", self.READY)
+        declaration = self.bare()
+        declaration["header"]["citations"] = {
+            "transport.bl_number": [self.citation("DOC-MINUTES", self.READY)]
+        }
+        found = self.problems(declaration)
+        self.assertFalse([p for p in found if "unrelated item" in p])
+
     def test_single_source_values_are_problems_unless_named(self) -> None:
         self.read(["DOC-REPORT"])
         self.fact("packages_weights", "DOC-REPORT", self.DEFECTS)

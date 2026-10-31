@@ -122,16 +122,19 @@ def run_verification(ctx, declaration: dict) -> dict:
         if document_id and case.flagged(document_id):
             problems.append(f"{label} cites excluded document {document_id}.")
             continue
-        fact = _matching_fact(facts, cite)
-        if fact is None:
+        matches = _matching_facts(facts, cite)
+        if not matches:
             problems.append(f"{label} cites a quote with no matching recorded fact.")
             continue
         if keywords:
-            entry = case.data["checklist"].get(fact["item"], {})
-            text = f"{fact['item']} {entry.get('question', '')}"
-            if not any(_mentions(text, word) for word in keywords):
+            for fact in matches:
+                entry = case.data["checklist"].get(fact["item"], {})
+                text = f"{fact['item']} {entry.get('question', '')}"
+                if any(_mentions(text, word) for word in keywords):
+                    break
+            else:
                 problems.append(
-                    f"{label} cites a fact from unrelated item {fact['item']}."
+                    f"{label} cites a fact from unrelated item {matches[0]['item']}."
                 )
 
     # Rule 5 (signatures): a proven signature item has a consistent check on a
@@ -303,23 +306,22 @@ def run_verification(ctx, declaration: dict) -> dict:
     return {"passed": not problems, "feedback": problems}
 
 
-def _matching_fact(facts: list, cite) -> dict | None:
-    """The recorded fact with the same document, page, and quote, or None."""
+def _matching_facts(facts: list, cite) -> list:
+    """Every recorded fact with the same document, page, and quote."""
     if not isinstance(cite, dict):
-        return None
+        return []
     try:
         page = int(cite.get("page"))
     except (TypeError, ValueError):
-        return None
+        return []
     document_id, quote = str(cite.get("document_id", "")), str(cite.get("quote", ""))
-    for fact in facts:
-        if (
-            fact["document_id"] == document_id
-            and fact["page"] == page
-            and document_text.normalize(fact["quote"]) == document_text.normalize(quote)
-        ):
-            return fact
-    return None
+    return [
+        fact
+        for fact in facts
+        if fact["document_id"] == document_id
+        and fact["page"] == page
+        and document_text.normalize(fact["quote"]) == document_text.normalize(quote)
+    ]
 
 
 def _mentions(text: str, keyword: str) -> bool:
