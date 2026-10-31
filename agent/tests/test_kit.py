@@ -149,6 +149,30 @@ class KitTest(unittest.TestCase):
         with self.assertRaisesRegex(CaseError, "cites 4 quotes"):
             case.file_declaration(args, "unverified")
 
+    def test_facts_cap_grows_with_declaration_items(self) -> None:
+        self.read(["DOC-REPORT", "DOC-MINUTES"])
+        case = self.case()
+        case.note_declaration_attempt(3)
+        self.assertEqual(14, case.facts_cap())
+        for _ in range(14):
+            case.record_fact(
+                "not_ready", "DOC-REPORT", 1, "Overall status is green", "x"
+            )
+        with self.assertRaisesRegex(case_record.FactLimitError, "already has 14 facts"):
+            case.record_fact(
+                "not_ready", "DOC-REPORT", 1, "Overall status is green", "x"
+            )
+
+    def test_facts_cap_uses_hs_codes_before_any_submission(self) -> None:
+        case = self.case()
+        case.data["facts"].append({"quote": "plasterboard of HS 6809.19.00"})
+        case.data["facts"].append({"quote": "tiles of HS 6907.21.00"})
+        self.assertEqual(10, case.facts_cap())
+        case.data["facts"].append({"quote": "also HS 6809.19 here"})
+        self.assertEqual(10, case.facts_cap())
+        case.note_declaration_attempt(1)
+        self.assertEqual(6, case.facts_cap())
+
     def test_flagged_document_withdraws_and_blocks_facts(self) -> None:
         self.read(["DOC-DECLARATION"])
         case = self.case()
@@ -243,6 +267,24 @@ class KitTest(unittest.TestCase):
         self.assertEqual(
             "unverified", CaseRecord(self.root, self.run_id).data["declaration"]["status"]
         )
+
+    def test_country_names_are_normalised_to_iso_codes(self) -> None:
+        args = json.loads(json.dumps(support.DECLARATION[1]))
+        args["header"]["exporter"]["country"] = "Turkiye"
+        args["items"][0]["origin"] = "germany"
+        result = self.tool("submit_declaration", args)
+        self.assertEqual("answered", result["status"])
+        filed = CaseRecord(self.root, self.run_id).data["declaration"]
+        self.assertEqual("TR", filed["header"]["exporter"]["country"])
+        self.assertEqual("DE", filed["items"][0]["origin"])
+
+    def test_unknown_country_names_are_left_for_the_2_letter_rule(self) -> None:
+        args = json.loads(json.dumps(support.DECLARATION[1]))
+        args["header"]["exporter"]["country"] = "Atlantis"
+        result = self.tool("submit_declaration", args)
+        self.assertEqual("answered", result["status"])
+        filed = CaseRecord(self.root, self.run_id).data["declaration"]
+        self.assertEqual("Atlantis", filed["header"]["exporter"]["country"])
 
     def test_cited_declaration_files_when_every_field_is_covered(self) -> None:
         self.read(["DOC-MINUTES"])
@@ -594,18 +636,65 @@ class TariffToolsTest(unittest.TestCase):
         )
         self.assertIn("porcelain", result["description"])
 
-    def test_lookup_tariff_offers_nearest_headings_when_missing(self) -> None:
+    def test_lookup_tariff_suggests_nothing_outside_the_chapter(self) -> None:
         result = tools.run(
             self.client,
             self.root,
             self.run_id,
             call("lookup_tariff", {"hs_code": "9999.99"}),
         )
+        self.assertEqual(
+            "no line in this chapter; ask the broker or add the line to the tariff pack",
+            result["message"],
+        )
+        self.assertEqual([], result["nearest"])
+
+    def test_lookup_tariff_lists_only_same_chapter_lines(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call("lookup_tariff", {"hs_code": "6809.99"}),
+        )
         self.assertEqual("not in pack", result["message"])
-        self.assertEqual(3, len(result["nearest"]))
-        self.assertEqual("9403.60", result["nearest"][0]["hs"])
+        self.assertEqual(
+            ["6809.19", "6809.11"], [line["hs"] for line in result["nearest"]]
+        )
+
+    def _record_invoice_fact(self) -> None:
+        tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call("set_checklist", {"items": [support.checklist_item("valuation")]}),
+        )
+        tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "analyze_document",
+                {"document_ids": ["DOC-REPORT"], "request": "invoice total"},
+            ),
+        )
+        tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "record_fact",
+                {
+                    "item": "valuation",
+                    "document_id": "DOC-REPORT",
+                    "page": 1,
+                    "quote": "Invoice total USD 21,000.",
+                    "claim": "invoice total",
+                },
+            ),
+        )
 
     def test_compute_duty_matches_the_worked_example(self) -> None:
+        self._record_invoice_fact()
         result = tools.run(
             self.client,
             self.root,
@@ -620,7 +709,7 @@ class TariffToolsTest(unittest.TestCase):
             ),
         )
         self.assertEqual(1508430.00, result["customs_value_gmd"])
-        self.assertAlmostEqual(48269.76, result["total_payable_gmd"], delta=1)
+        self.assertAlmostEqual(621473.16, result["total_payable_gmd"], delta=1)
         self.assertEqual(
             ["IDF", "PRF", "AUL", "ECL", "GNSW", "VAT"],
             [levy["code"] for levy in result["levies"]],
@@ -638,6 +727,43 @@ class TariffToolsTest(unittest.TestCase):
             ),
         )
         self.assertIn("no XXX rate", result["error"])
+
+    def test_compute_duty_refuses_an_unquoted_total(self) -> None:
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {
+                    "currency": "USD",
+                    "invoice_total": 21000,
+                    "hs_code": "6809.19.00",
+                },
+            ),
+        )
+        self.assertEqual(
+            "invoice total 21000 is not quoted in any recorded fact",
+            result["error"],
+        )
+
+    def test_compute_duty_allows_half_percent_tolerance(self) -> None:
+        self._record_invoice_fact()
+        result = tools.run(
+            self.client,
+            self.root,
+            self.run_id,
+            call(
+                "compute_duty",
+                {
+                    "currency": "USD",
+                    "invoice_total": 21100,
+                    "hs_code": "6809.19.00",
+                },
+            ),
+        )
+        self.assertNotIn("error", result)
+        self.assertEqual(1515613.0, result["customs_value_gmd"])
 
 
 if __name__ == "__main__":

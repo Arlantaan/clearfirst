@@ -26,6 +26,54 @@ if TYPE_CHECKING:
 
 MAX_REFUSALS = 3
 
+# Country names (upper-cased) the model may submit for exporter.country and
+# items[].origin; normalised to ISO codes before validation. Anything else
+# still has to pass the 2-letter rule.
+COUNTRY_CODES = {
+    "TURKIYE": "TR",
+    "TURKEY": "TR",
+    "VIET NAM": "VN",
+    "VIETNAM": "VN",
+    "CHINA": "CN",
+    "THAILAND": "TH",
+    "INDIA": "IN",
+    "SENEGAL": "SN",
+    "NIGERIA": "NG",
+    "GHANA": "GH",
+    "NETHERLANDS": "NL",
+    "GERMANY": "DE",
+    "SPAIN": "ES",
+    "ITALY": "IT",
+    "FRANCE": "FR",
+    "UAE": "AE",
+    "UNITED ARAB EMIRATES": "AE",
+    "USA": "US",
+    "UNITED STATES": "US",
+    "UK": "GB",
+    "UNITED KINGDOM": "GB",
+    "BRAZIL": "BR",
+    "MOROCCO": "MA",
+    "EGYPT": "EG",
+}
+
+
+def _iso_country(value):
+    """The ISO code when value is a known country name, else value unchanged."""
+    if isinstance(value, str) and value.strip().upper() in COUNTRY_CODES:
+        return COUNTRY_CODES[value.strip().upper()]
+    return value
+
+
+def _normalise_countries(declaration: dict) -> None:
+    header = declaration.get("header") or {}
+    exporter = header.get("exporter") or {}
+    if "country" in exporter:
+        exporter["country"] = _iso_country(exporter["country"])
+    for item in declaration.get("items") or []:
+        if isinstance(item, dict) and "origin" in item:
+            item["origin"] = _iso_country(item["origin"])
+
+
 CITATION = {
     "type": "object",
     "additionalProperties": False,
@@ -167,6 +215,7 @@ DEFINITION = {
     "HS codes and citations, discrepancies where documents disagree, and open questions. Fill every "
     "header box; every other header and item field must be cited (1-3 quotes) or named in "
     "discrepancies/open_questions. declaration_type and procedure_code take no citation. "
+    "Country names are accepted for exporter.country and origin and normalised to ISO codes. "
     "Attach the compute_duty result as duty_estimate. "
     "Example header: {\"importer\": {\"name\": \"...\", \"tin\": \"...\"}, \"citations\": "
     "{\"importer.tin\": [{\"document_id\": \"...\", \"page\": 1, \"quote\": \"...\"}]}}.",
@@ -194,6 +243,9 @@ def run(ctx: Context, args: dict) -> dict:
     }
     if args.get("duty_estimate") is not None:
         declaration["duty_estimate"] = args.get("duty_estimate")
+    _normalise_countries(declaration)
+    items = declaration["items"]
+    ctx.case.note_declaration_attempt(len(items) if isinstance(items, list) else 0)
     if not ctx.verification:
         ctx.case.file_declaration(declaration, "unverified")
         return {"filed": True, "declaration": "unverified", "status": "answered"}

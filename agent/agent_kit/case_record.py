@@ -19,8 +19,10 @@ from .progress import now
 ITEM_STATUSES = ("open", "proven", "escalated")
 
 
-MAX_FACTS_PER_ITEM = 6
+MAX_FACTS_PER_ITEM = 6  # base cap; facts_cap() grows it for multi-item declarations
 MAX_CITATIONS = 3  # per header field or item
+
+HS_IN_QUOTE = re.compile(r"(?<!\d)\d{4}\.\d{2}(?:\.\d{2})?(?!\d)")
 
 HEADER_FIELDS = (
     "declaration_type",
@@ -77,7 +79,7 @@ class CaseError(ValueError):
 
 
 class FactLimitError(CaseError):
-    """The item already has MAX_FACTS_PER_ITEM facts. Not a rejected quote."""
+    """The item already has all the facts its cap allows. Not a rejected quote."""
 
 
 ITEM_ID = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
@@ -283,7 +285,7 @@ class CaseRecord:
         else:
             next_step = (
                 "Every item is proven or escalated: file the declaration now. Add another fact "
-                f"only if one could be disputed (at most {MAX_FACTS_PER_ITEM} per item)."
+                f"only if one could be disputed (at most {self.facts_cap()} per item)."
             )
         return {
             "proven": len(by_status["proven"]),
@@ -293,18 +295,44 @@ class CaseRecord:
             "summary": f"{done} of {len(checklist)} items proven or escalated. {next_step}",
         }
 
+    def facts_cap(self) -> int:
+        """Facts allowed per item: 6, plus 4 for each declaration item beyond the first.
+
+        Sized by the most recent submit_declaration attempt; before any attempt,
+        by the distinct HS codes quoted in recorded facts (6-digit prefixes).
+        """
+        items = self.data.get("last_declaration_items")
+        if items is None:
+            codes = {
+                "".join(c for c in match.group(0) if c.isdigit())[:6]
+                for fact in self.data["facts"]
+                for match in HS_IN_QUOTE.finditer(fact.get("quote", ""))
+            }
+            items = len(codes)
+        return MAX_FACTS_PER_ITEM + 4 * (max(1, int(items)) - 1)
+
+    def note_declaration_attempt(self, item_count: int) -> None:
+        """Remember a submit_declaration attempt's item count (sizes facts_cap)."""
+        self.data["last_declaration_items"] = max(0, int(item_count))
+        self._save(
+            "declaration_attempted",
+            "agent",
+            {"items": self.data["last_declaration_items"]},
+        )
+
     def record_fact(
         self, item: str, document_id: str, page: int, quote: str, claim: str
     ) -> dict:
         """Mark evidence for a checklist item. Refused unless the quote is on that page.
 
-        At most MAX_FACTS_PER_ITEM facts per item (FactLimitError). The returned fact
+        At most facts_cap() facts per item (FactLimitError). The returned fact
         carries `progress` (see progress()) so the model sees what is still open.
         """
         entry = self._item(item)
-        if len(entry["facts"]) >= MAX_FACTS_PER_ITEM:
+        cap = self.facts_cap()
+        if len(entry["facts"]) >= cap:
             raise FactLimitError(
-                f"{item} already has {MAX_FACTS_PER_ITEM} facts, the most an item takes. "
+                f"{item} already has {cap} facts, the most an item takes. "
                 + self.progress()["summary"]
             )
         try:

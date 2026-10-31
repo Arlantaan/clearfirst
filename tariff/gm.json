@@ -189,6 +189,104 @@
       "duty_pct": 20.0,
       "vat_pct": 15.0,
       "cet_band": "4"
+    },
+    {
+      "hs": "0405.10",
+      "description": "Butter",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5 - specific goods for economic development"
+    },
+    {
+      "hs": "0406.90",
+      "description": "Cheese, other (incl. kashar, hard and semi-hard cheeses)",
+      "duty_pct": 20.0,
+      "vat_pct": 15.0,
+      "cet_band": "4 - final consumer goods"
+    },
+    {
+      "hs": "0710.10",
+      "description": "Potatoes, uncooked or cooked by steaming or boiling, frozen",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "0710.21",
+      "description": "Peas, frozen",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "0710.30",
+      "description": "Spinach, frozen",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "0710.40",
+      "description": "Sweet corn, frozen",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "0710.80",
+      "description": "Other vegetables, frozen (incl. mixed vegetables)",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "2004.10",
+      "description": "Potatoes, prepared or preserved otherwise than by vinegar, frozen (pre-fried chips)",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
+    },
+    {
+      "hs": "1901.20",
+      "description": "Mixes and doughs for the preparation of bakers' wares",
+      "duty_pct": 20.0,
+      "vat_pct": 15.0,
+      "cet_band": "4 - final consumer goods"
+    },
+    {
+      "hs": "1901.10",
+      "description": "Preparations for infant use, put up for retail sale",
+      "duty_pct": 5.0,
+      "vat_pct": 0.0,
+      "cet_band": "1 - essential goods (VAT exempt)"
+    },
+    {
+      "hs": "0402.21",
+      "description": "Milk powder, not sweetened, fat > 1.5%",
+      "duty_pct": 5.0,
+      "vat_pct": 0.0,
+      "cet_band": "1 (VAT exempt staple)"
+    },
+    {
+      "hs": "1101.00",
+      "description": "Wheat or meslin flour",
+      "duty_pct": 5.0,
+      "vat_pct": 0.0,
+      "cet_band": "1 (VAT exempt staple)"
+    },
+    {
+      "hs": "0303.89",
+      "description": "Frozen fish, other",
+      "duty_pct": 10.0,
+      "vat_pct": 0.0,
+      "cet_band": "2 (VAT exempt staple)"
+    },
+    {
+      "hs": "0207.14",
+      "description": "Chicken cuts and offal, frozen",
+      "duty_pct": 35.0,
+      "vat_pct": 15.0,
+      "cet_band": "5"
     }
   ],
   "worked_example": {

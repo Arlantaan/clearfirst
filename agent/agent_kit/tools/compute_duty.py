@@ -8,6 +8,7 @@ declaration as duty_estimate.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from ..tariff import heading, load_pack, nearest_lines, schedule_line
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from . import Context
 
 BASES = ("customs_value", "customs_value_plus_duty")
+QUOTED_NUMBER = re.compile(r"\d[\d,]*\.?\d*")
 
 DEFINITION = {
     "type": "function",
@@ -23,7 +25,8 @@ DEFINITION = {
     "description": "Compute the duty estimate from the country tariff pack: "
     "customs value in GMD (invoice total x exchange rate), each levy in order "
     "with its amount, VAT on customs value plus import duty, and the total "
-    "payable. Call it before filing and attach the result as duty_estimate.",
+    "payable. The invoice total must be quoted in a recorded fact. Call it "
+    "before filing and attach the result as duty_estimate.",
     "parameters": {
         "type": "object",
         "additionalProperties": False,
@@ -56,6 +59,17 @@ def run(ctx: Context, args: dict) -> dict:
         raise ValueError("invoice_total must be a number") from None
     if total <= 0:
         raise ValueError("invoice_total must be positive")
+    quoted = []
+    for fact in ctx.case.data["facts"]:
+        for match in QUOTED_NUMBER.finditer(fact.get("quote", "")):
+            try:
+                quoted.append(float(match.group(0).replace(",", "")))
+            except ValueError:
+                continue
+    if not any(abs(number - total) <= total * 0.005 for number in quoted):
+        raise ValueError(
+            f"invoice total {args.get('invoice_total')} is not quoted in any recorded fact"
+        )
     hs_code = str(args.get("hs_code", ""))
     line = schedule_line(pack, heading(hs_code))
     if line is None:

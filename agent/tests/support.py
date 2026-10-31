@@ -19,7 +19,8 @@ from tests.fake_model import Scripted, ScriptedModel
 # A tiny case: document id -> page texts.
 INITIAL = {
     "DOC-REPORT": [
-        "Weekly status report. Overall status is green. Open Severity 1 defects: 21 at period end."
+        "Weekly status report. Overall status is green. Open Severity 1 defects: 21 at period end. "
+        "Invoice total USD 21,000."
     ],
     "DOC-MINUTES": [
         "Steering minutes. Mr. Lindgren confirmed the system is ready for go-live. Erik Lindgren, Engagement Partner."
